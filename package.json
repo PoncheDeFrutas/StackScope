@@ -1,7 +1,7 @@
 {
   "name": "StackScope",
   "displayName": "StackScope",
-  "publisher": "EightLayerWorks",
+  "publisher": "EightLayerStudio",
   "author": {
     "name": "Josue Guevara"
   },
@@ -77,6 +77,8 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
+    "vsix": "npx @vscode/vsce package --no-dependencies",
+    "vsix:publish": "npx @vscode/vsce publish --no-dependencies",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
