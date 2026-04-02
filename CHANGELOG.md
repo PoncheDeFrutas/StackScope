@@ -6,4 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- Initial release
+### Added
+
+- Structured project documentation under `docs/` with focused pages.
+- Roadmap document (`docs/roadmap.md`).
+- Changelog/release process guide (`docs/changelog-guide.md`).
+
+### Changed
+
+- Root `README.md` now acts as a concise entrypoint to split documentation.
