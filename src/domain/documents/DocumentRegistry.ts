@@ -16,6 +16,23 @@ export class DocumentRegistry {
 	}
 
 	/**
+	 * Updates a document's memory reference (for dynamic re-resolution).
+	 */
+	updateMemoryReference(id: string, memoryReference: string): MemoryDocument | null {
+		const doc = this.documents.get(id);
+		if (!doc) {
+			return null;
+		}
+		const updated: MemoryDocument = Object.freeze({
+			...doc,
+			memoryReference,
+			hasResolvedReference: true,
+		});
+		this.documents.set(id, updated);
+		return updated;
+	}
+
+	/**
 	 * Removes a document from the registry.
 	 */
 	remove(id: string): boolean {

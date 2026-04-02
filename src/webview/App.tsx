@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
-import { MemoryGrid } from './components/MemoryGrid.js';
+import { VirtualMemoryGrid } from './components/VirtualMemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Toolbar } from './components/Toolbar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
+import { usePagedMemory } from './hooks/usePagedMemory.js';
 import type { SessionSnapshot, DocumentSnapshot, PresetSnapshot } from '../protocol/methods.js';
 import type { MemoryViewConfig } from '../domain/config/MemoryViewConfig.js';
 import { DEFAULT_CONFIG } from '../domain/config/MemoryViewConfig.js';
@@ -14,16 +15,8 @@ type AppState =
 	| { phase: 'no-session' }
 	| { phase: 'no-document'; session: SessionSnapshot }
 	| { phase: 'opening-document'; session: SessionSnapshot }
-	| { phase: 'loading-memory'; session: SessionSnapshot; document: DocumentSnapshot }
-	| {
-			phase: 'ready';
-			session: SessionSnapshot;
-			document: DocumentSnapshot;
-			memory: { address: string; data: (number | null)[] };
-	  }
+	| { phase: 'ready'; session: SessionSnapshot; document: DocumentSnapshot }
 	| { phase: 'error'; session: SessionSnapshot; document: DocumentSnapshot | null; error: string };
-
-const INITIAL_BYTE_COUNT = 256;
 
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
@@ -33,6 +26,16 @@ export function App(): JSX.Element {
 	const [showSettings, setShowSettings] = useState(false);
 	const [currentTarget, setCurrentTarget] = useState('');
 
+	// Paged memory state
+	const pagedMemory = usePagedMemory();
+
+	// Track previous data for change highlighting
+	const [changedBytes, setChangedBytes] = useState<Set<number>>(new Set());
+	const baselineRef = useRef<Map<number, number | null>>(new Map());
+
+	// Track if we need to refresh on next stopped event
+	const pendingRefreshRef = useRef(false);
+
 	useEffect(() => {
 		// Subscribe to session changes
 		const unsubSession = messageBus.on('sessionChanged', (payload) => {
@@ -40,8 +43,38 @@ export function App(): JSX.Element {
 				if (payload.session.status === 'none' || !payload.session.sessionId) {
 					return { phase: 'no-session' };
 				}
+
+				// When session becomes stopped, trigger data refresh
+				if (payload.session.status === 'stopped') {
+					if (prev.phase === 'ready') {
+						// Trigger silent refresh of loaded pages
+						pendingRefreshRef.current = true;
+						return { ...prev, session: payload.session };
+					}
+					if (prev.phase === 'error' && prev.document) {
+						return {
+							phase: 'ready',
+							session: payload.session,
+							document: prev.document,
+						};
+					}
+				}
+
+				// When transitioning to running, save baseline for change detection
+				if (payload.session.status === 'running' && prev.phase === 'ready') {
+					// Save current data as baseline
+					const baseline = new Map<number, number | null>();
+					for (const [offset, page] of pagedMemory.state.pages) {
+						page.data.forEach((byte, i) => {
+							baseline.set(offset + i, byte);
+						});
+					}
+					baselineRef.current = baseline;
+					setChangedBytes(new Set());
+				}
+
 				// Keep document if we have one, otherwise go to no-document
-				if (prev.phase === 'ready' || prev.phase === 'loading-memory') {
+				if (prev.phase === 'ready') {
 					return { ...prev, session: payload.session };
 				}
 				return { phase: 'no-document', session: payload.session };
@@ -58,8 +91,14 @@ export function App(): JSX.Element {
 					return { phase: 'no-session' };
 				}
 				if ('session' in prev) {
+					// Reset paged memory for new document
+					pagedMemory.reset(
+						payload.document.id,
+						payload.document.address,
+						config.totalSize
+					);
 					return {
-						phase: 'loading-memory',
+						phase: 'ready',
 						session: prev.session,
 						document: payload.document,
 					};
@@ -77,17 +116,18 @@ export function App(): JSX.Element {
 		};
 	}, []);
 
-	// Load memory when we have a document and session is stopped
+	// Handle pending refresh when stopped
 	useEffect(() => {
-		if (state.phase === 'loading-memory' && state.session.status === 'stopped') {
-			loadMemory(state.session, state.document);
+		if (pendingRefreshRef.current && state.phase === 'ready' && state.session.status === 'stopped') {
+			pendingRefreshRef.current = false;
+			handleRefreshInternal();
 		}
 	}, [state]);
 
 	async function init(): Promise<void> {
 		try {
 			const result = await HostClient.init();
-			
+
 			// Store presets from init
 			setPresets(result.presets);
 
@@ -102,8 +142,16 @@ export function App(): JSX.Element {
 			}
 
 			setCurrentTarget(result.activeDocument.address);
+
+			// Initialize paged memory
+			pagedMemory.reset(
+				result.activeDocument.id,
+				result.activeDocument.address,
+				config.totalSize
+			);
+
 			setState({
-				phase: 'loading-memory',
+				phase: 'ready',
 				session: result.session,
 				document: result.activeDocument,
 			});
@@ -117,36 +165,32 @@ export function App(): JSX.Element {
 		}
 	}
 
-	async function loadMemory(
-		session: SessionSnapshot,
-		document: DocumentSnapshot
-	): Promise<void> {
-		try {
-			const result = await HostClient.readMemory(
-				document.id,
-				0,
-				INITIAL_BYTE_COUNT
-			);
+	/** Internal refresh that compares with baseline for highlighting */
+	async function handleRefreshInternal(): Promise<void> {
+		if (state.phase !== 'ready') return;
 
-			setState({
-				phase: 'ready',
-				session,
-				document,
-				memory: { address: result.address, data: result.data },
-			});
-		} catch (err) {
-			setState({
-				phase: 'error',
-				session,
-				document,
-				error: err instanceof Error ? err.message : 'Failed to read memory',
+		await pagedMemory.refreshAll();
+
+		// Compare with baseline for change detection
+		const changed = new Set<number>();
+		const baseline = baselineRef.current;
+
+		for (const [offset, page] of pagedMemory.state.pages) {
+			page.data.forEach((byte, i) => {
+				const globalOffset = offset + i;
+				const baselineByte = baseline.get(globalOffset);
+				if (baselineByte !== undefined && baselineByte !== byte) {
+					changed.add(globalOffset);
+				}
 			});
 		}
+
+		setChangedBytes(changed);
 	}
 
 	const handleOpenDocument = useCallback(async (target: string) => {
 		setCurrentTarget(target);
-		setSelectedPresetId(null); // Clear preset selection when opening custom target
+		setSelectedPresetId(null);
 		setState((prev) => {
 			if ('session' in prev) {
 				return { phase: 'opening-document', session: prev.session };
@@ -156,11 +200,18 @@ export function App(): JSX.Element {
 
 		try {
 			const result = await HostClient.openDocument(target);
-			// Document changed event will trigger state transition to loading-memory
+
+			// Reset paged memory for new document
+			pagedMemory.reset(result.document.id, result.document.address, config.totalSize);
+
+			// Clear change tracking
+			baselineRef.current = new Map();
+			setChangedBytes(new Set());
+
 			setState((prev) => {
 				if ('session' in prev) {
 					return {
-						phase: 'loading-memory',
+						phase: 'ready',
 						session: prev.session,
 						document: result.document,
 					};
@@ -179,7 +230,7 @@ export function App(): JSX.Element {
 				};
 			});
 		}
-	}, []);
+	}, [config.totalSize, pagedMemory]);
 
 	const handleSelectPreset = useCallback((preset: PresetSnapshot | null) => {
 		if (preset) {
@@ -215,11 +266,7 @@ export function App(): JSX.Element {
 
 	const handleRefresh = useCallback(() => {
 		if (state.phase === 'ready') {
-			setState({
-				phase: 'loading-memory',
-				session: state.session,
-				document: state.document,
-			});
+			handleRefreshInternal();
 		}
 	}, [state]);
 
@@ -230,22 +277,31 @@ export function App(): JSX.Element {
 	const handleApplySettings = useCallback((newConfig: MemoryViewConfig, target: string) => {
 		setConfig(newConfig);
 		setShowSettings(false);
+
+		// Update total size in paged memory if changed
+		if (state.phase === 'ready' && pagedMemory.state.documentId) {
+			pagedMemory.reset(
+				pagedMemory.state.documentId,
+				pagedMemory.state.baseAddress,
+				newConfig.totalSize
+			);
+		}
+
 		if (target !== currentTarget) {
 			handleOpenDocument(target);
-		} else {
-			// Just reload with new config
-			handleRefresh();
 		}
-	}, [currentTarget, handleOpenDocument, handleRefresh]);
+	}, [currentTarget, handleOpenDocument, state, pagedMemory]);
 
 	const handleCancelSettings = useCallback(() => {
 		setShowSettings(false);
 	}, []);
 
+	const handleVisibleRangeChange = useCallback((startOffset: number, endOffset: number) => {
+		pagedMemory.loadRange(startOffset, endOffset);
+	}, [pagedMemory]);
+
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
-	const isLoading = state.phase === 'loading' || 
-		state.phase === 'opening-document' || 
-		state.phase === 'loading-memory';
+	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 
 	return (
 		<div style={styles.container}>
@@ -272,7 +328,7 @@ export function App(): JSX.Element {
 					disabled={sessionStatus !== 'stopped'}
 				/>
 			)}
-			<div style={styles.content}>{renderContent(state, config)}</div>
+			<div style={styles.content}>{renderContent(state, config, pagedMemory, handleVisibleRangeChange, changedBytes)}</div>
 			<StatusBar
 				status={sessionStatus}
 				sessionId={'session' in state ? state.session.sessionId : null}
@@ -283,7 +339,13 @@ export function App(): JSX.Element {
 	);
 }
 
-function renderContent(state: AppState, config: MemoryViewConfig): JSX.Element {
+function renderContent(
+	state: AppState,
+	config: MemoryViewConfig,
+	pagedMemory: ReturnType<typeof usePagedMemory>,
+	onVisibleRangeChange: (start: number, end: number) => void,
+	changedBytes: Set<number>
+): JSX.Element {
 	switch (state.phase) {
 		case 'loading':
 			return <Message>Loading...</Message>;
@@ -309,7 +371,7 @@ function renderContent(state: AppState, config: MemoryViewConfig): JSX.Element {
 		case 'opening-document':
 			return <Message>Resolving address...</Message>;
 
-		case 'loading-memory':
+		case 'ready':
 			if (state.session.status !== 'stopped') {
 				return (
 					<Message>
@@ -319,16 +381,18 @@ function renderContent(state: AppState, config: MemoryViewConfig): JSX.Element {
 					</Message>
 				);
 			}
-			return <Message>Reading memory...</Message>;
-
-		case 'ready':
 			return (
-				<MemoryGrid
-					address={state.memory.address}
-					data={state.memory.data}
+				<VirtualMemoryGrid
+					baseAddress={pagedMemory.state.baseAddress}
+					totalSize={config.totalSize}
+					getBytes={pagedMemory.getBytes}
+					onVisibleRangeChange={onVisibleRangeChange}
 					columns={config.columns}
 					unitSize={config.unitSize}
 					endianness={config.endianness}
+					numberFormat={config.numberFormat}
+					decodedMode={config.decodedMode}
+					changedBytes={changedBytes}
 				/>
 			);
 
@@ -365,7 +429,7 @@ const styles: Record<string, React.CSSProperties> = {
 	},
 	content: {
 		flex: 1,
-		overflow: 'auto',
+		overflow: 'hidden',
 	},
 	message: {
 		display: 'flex',

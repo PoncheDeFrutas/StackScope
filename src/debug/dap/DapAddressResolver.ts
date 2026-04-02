@@ -45,6 +45,18 @@ export class DapAddressResolver {
 			}
 		}
 
+		// Also support bare register names like "x1", "pc", "sp" by trying "$" prefix.
+		if (this.isBareRegisterExpression(trimmed)) {
+			const prefixed = await this.tryEvaluate(
+				session,
+				`$${trimmed}`,
+				effectiveFrameId
+			);
+			if (prefixed) {
+				return prefixed;
+			}
+		}
+
 		// Try different evaluation strategies for other expressions
 		return (
 			(await this.tryEvaluate(session, trimmed, effectiveFrameId)) ??
@@ -62,36 +74,53 @@ export class DapAddressResolver {
 		return /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(expression);
 	}
 
+	private isBareRegisterExpression(expression: string): boolean {
+		return /^(x\d+|r\d+|pc|sp|lr|fp|ip|ra)$/i.test(expression);
+	}
+
 	private async tryEvaluate(
 		session: vscode.DebugSession,
 		expression: string,
 		frameId?: number
 	): Promise<string | null> {
-		try {
-			const response = await session.customRequest('evaluate', {
-				expression,
-				context: 'watch',
-				frameId,
-			});
+		const contexts = ['watch', 'hover'] as const;
+		for (const context of contexts) {
+			try {
+				const response = await session.customRequest('evaluate', {
+					expression,
+					context,
+					frameId,
+				});
 
-			// Some adapters return memoryReference directly
-			if (response.memoryReference) {
-				return response.memoryReference;
+				// Some adapters return memoryReference directly
+				if (response.memoryReference) {
+					return response.memoryReference;
+				}
+
+				// Try to extract address from result (e.g., "0x20000000", "(void *) 0x7fff5c2a")
+				const match = response.result?.match(/0x[0-9a-fA-F]+/i);
+				if (match) {
+					return match[0];
+				}
+			} catch {
+				// Try next context.
 			}
-
-			// Try to extract address from result (e.g., "0x20000000", "(void *) 0x7fff5c2a")
-			const match = response.result?.match(/0x[0-9a-fA-F]+/i);
-			if (match) {
-				return match[0];
-			}
-
-			return null;
-		} catch {
-			return null;
 		}
+
+		return null;
 	}
 
 	private async getTopFrameId(session: vscode.DebugSession): Promise<number | undefined> {
+		const activeFrame = vscode.debug.activeStackItem;
+		if (
+			activeFrame &&
+			typeof activeFrame === 'object' &&
+			'frameId' in activeFrame &&
+			typeof (activeFrame as { frameId?: unknown }).frameId === 'number'
+		) {
+			return (activeFrame as { frameId: number }).frameId;
+		}
+
 		try {
 			// Get threads
 			const threadsResponse = await session.customRequest('threads');

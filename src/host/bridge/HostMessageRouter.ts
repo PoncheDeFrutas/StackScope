@@ -7,7 +7,10 @@ import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import type { PresetService } from '../services/PresetService.js';
-import { createMemoryDocument } from '../../domain/documents/MemoryDocument.js';
+import {
+	createMemoryDocument,
+	isLiteralAddress,
+} from '../../domain/documents/MemoryDocument.js';
 import { generateDocumentId } from '../../shared/ids.js';
 import { isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
 
@@ -106,11 +109,11 @@ export class HostMessageRouter {
 			};
 		});
 
-		// ReadMemory handler - refresh session state before reading
+		// ReadMemory handler - refresh session state and re-resolve dynamic targets before reading
 		this.handlers.set('readMemory', async (params) => {
 			const { documentId, offset, count } = params as MethodMap['readMemory']['params'];
 
-			const doc = this.documentRegistry.get(documentId);
+			let doc = this.documentRegistry.get(documentId);
 			if (!doc) {
 				throw createProtocolError(
 					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
@@ -135,9 +138,45 @@ export class HostMessageRouter {
 				);
 			}
 
+			// For dynamic targets (registers, expressions), re-resolve the address
+			// This ensures we read from the current value of $x1, $sp, etc.
+			let memoryReference = doc.memoryReference;
+			if (doc.isDynamic) {
+				const newReference = await this.debugGateway.evaluateForMemoryReference(
+					state.sessionId,
+					doc.address
+				);
+				if (newReference) {
+					memoryReference = newReference;
+					// Update the document only if the resolved reference actually changed.
+					// Do not emit documentChanged here to avoid read -> event -> read loops.
+					if (newReference !== doc.memoryReference) {
+						const updated = this.documentRegistry.updateMemoryReference(
+							documentId,
+							newReference
+						);
+						if (updated) {
+							doc = updated;
+						}
+					}
+				}
+				// If re-resolution fails and we never had a valid reference yet,
+				// return unreadable bytes and wait for next stop.
+				if (!newReference && !doc.hasResolvedReference) {
+					return {
+						address: '0x0',
+						data: new Array(count).fill(null),
+						bytesRead: 0,
+						hasUnreadable: true,
+					};
+				}
+				// If re-resolution fails but we had one valid ref before,
+				// continue using last known reference.
+			}
+
 			const result = await this.debugGateway.readMemory(
 				state.sessionId,
-				doc.memoryReference,
+				memoryReference,
 				offset,
 				count
 			);
@@ -179,18 +218,14 @@ export class HostMessageRouter {
 				target
 			);
 
-			if (!memoryReference) {
-				// Determine appropriate error based on target type
-				const isRegister = /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(target);
+			const isLiteral = isLiteralAddress(target);
+			const resolvedReference = memoryReference ?? (isLiteral ? target.trim() : '0x0');
+			const hasResolvedReference = memoryReference !== null;
+
+			if (!hasResolvedReference && isLiteral) {
 				throw createProtocolError(
-					isRegister
-						? ProtocolErrorCode.REGISTER_NOT_AVAILABLE
-						: ProtocolErrorCode.SYMBOL_NOT_FOUND,
-					`Could not resolve "${target}". ${
-						isRegister
-							? 'Register may not be available in current context.'
-							: 'Try a hex address like 0x20000000 or a valid pointer expression.'
-					}`
+					ProtocolErrorCode.INVALID_ADDRESS,
+					`Could not parse literal address "${target}".`
 				);
 			}
 
@@ -199,7 +234,8 @@ export class HostMessageRouter {
 				generateDocumentId(),
 				target,
 				state.sessionId,
-				memoryReference
+				resolvedReference,
+				hasResolvedReference
 			);
 
 			this.documentRegistry.add(doc);

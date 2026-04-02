@@ -10,7 +10,9 @@
     "Debuggers"
   ],
   "activationEvents": [
-    "onDebug"
+    "onDebug",
+    "onCommand:stackscope.openMemoryView",
+    "onCommand:stackscope.openMemoryViewInEditor"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -19,13 +21,47 @@
         "command": "stackscope.openMemoryView",
         "title": "Open Memory View",
         "category": "StackScope"
+      },
+      {
+        "command": "stackscope.focusMemoryView",
+        "title": "Focus Memory View",
+        "category": "StackScope"
+      },
+      {
+        "command": "stackscope.openMemoryViewInEditor",
+        "title": "Open Memory View (Editor Tab)",
+        "category": "StackScope"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "stackscope.openMemoryView",
-          "when": "debugState != inactive"
+          "command": "stackscope.openMemoryView"
+        },
+        {
+          "command": "stackscope.focusMemoryView"
+        },
+        {
+          "command": "stackscope.openMemoryViewInEditor"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "stackscope-panel",
+          "title": "StackScope",
+          "icon": "$(debug-stackframe)"
+        }
+      ]
+    },
+    "views": {
+      "stackscope-panel": [
+        {
+          "type": "webview",
+          "id": "stackscope.memoryView",
+          "name": "Memory",
+          "contextualTitle": "StackScope Memory"
         }
       ]
     }

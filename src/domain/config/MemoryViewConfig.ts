@@ -1,6 +1,6 @@
 /**
  * Unit size for displaying memory values.
- * 1 = byte, 2 = word (16-bit), 4 = dword (32-bit), 8 = qword (64-bit), 16 = 128-bit (not commonly used but included for completeness).
+ * 1 = byte, 2 = word (16-bit), 4 = dword (32-bit), 8 = qword (64-bit), 16 = 128-bit.
  */
 export type UnitSize = 1 | 2 | 4 | 8 | 16;
 
@@ -8,6 +8,16 @@ export type UnitSize = 1 | 2 | 4 | 8 | 16;
  * Byte order for multi-byte values.
  */
 export type Endianness = 'little' | 'big';
+
+/**
+ * Number format for display.
+ */
+export type NumberFormat = 'hex' | 'dec' | 'oct' | 'bin';
+
+/**
+ * Decoded bytes display mode.
+ */
+export type DecodedMode = 'ascii' | 'uint8' | 'int8' | 'bin' | 'hidden';
 
 /**
  * Configuration for memory view display.
@@ -22,6 +32,10 @@ export interface MemoryViewConfig {
 	readonly endianness: Endianness;
 	/** Total bytes to display (default: 4MB = 4 * 1024 * 1024) */
 	readonly totalSize: number;
+	/** Number format for hex values (default: 'hex') */
+	readonly numberFormat: NumberFormat;
+	/** Decoded column display mode (default: 'ascii') */
+	readonly decodedMode: DecodedMode;
 }
 
 /** Default configuration values */
@@ -30,6 +44,8 @@ export const DEFAULT_CONFIG: MemoryViewConfig = {
 	unitSize: 1,
 	endianness: 'little',
 	totalSize: 4 * 1024 * 1024, // 4MB
+	numberFormat: 'hex',
+	decodedMode: 'ascii',
 };
 
 /** Minimum total size (256 bytes) */
@@ -44,6 +60,12 @@ export const VALID_COLUMNS = [1, 4, 8, 16, 32] as const;
 /** Valid unit sizes */
 export const VALID_UNIT_SIZES: readonly UnitSize[] = [1, 2, 4, 8, 16];
 
+/** Valid number formats */
+export const VALID_NUMBER_FORMATS: readonly NumberFormat[] = ['hex', 'dec', 'oct', 'bin'];
+
+/** Valid decoded modes */
+export const VALID_DECODED_MODES: readonly DecodedMode[] = ['ascii', 'uint8', 'int8', 'bin', 'hidden'];
+
 /**
  * Creates a new MemoryViewConfig with defaults for missing values.
  */
@@ -55,6 +77,8 @@ export function createMemoryViewConfig(
 		unitSize: partial.unitSize ?? DEFAULT_CONFIG.unitSize,
 		endianness: partial.endianness ?? DEFAULT_CONFIG.endianness,
 		totalSize: partial.totalSize ?? DEFAULT_CONFIG.totalSize,
+		numberFormat: partial.numberFormat ?? DEFAULT_CONFIG.numberFormat,
+		decodedMode: partial.decodedMode ?? DEFAULT_CONFIG.decodedMode,
 	});
 }
 

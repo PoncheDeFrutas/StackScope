@@ -1,10 +1,8 @@
 import type { CSSProperties } from 'react';
+import type { UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
 
 /** Represents a byte value or null for unreadable memory */
 export type MemoryByte = number | null;
-
-export type UnitSize = 1 | 2 | 4 | 8;
-export type Endianness = 'little' | 'big';
 
 interface MemoryGridProps {
 	address: string;

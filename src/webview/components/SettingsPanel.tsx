@@ -1,8 +1,10 @@
 import { useState, useCallback, type CSSProperties } from 'react';
-import type { MemoryViewConfig, UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
+import type { MemoryViewConfig, UnitSize, Endianness, NumberFormat, DecodedMode } from '../../domain/config/MemoryViewConfig.js';
 import {
 	VALID_COLUMNS,
 	VALID_UNIT_SIZES,
+	VALID_NUMBER_FORMATS,
+	VALID_DECODED_MODES,
 	MIN_TOTAL_SIZE,
 	MAX_TOTAL_SIZE,
 	formatByteSize,
@@ -35,6 +37,8 @@ export function SettingsPanel({
 	const [unitSize, setUnitSize] = useState<UnitSize>(config.unitSize);
 	const [endianness, setEndianness] = useState<Endianness>(config.endianness);
 	const [totalSizeInput, setTotalSizeInput] = useState(formatByteSize(config.totalSize));
+	const [numberFormat, setNumberFormat] = useState<NumberFormat>(config.numberFormat);
+	const [decodedMode, setDecodedMode] = useState<DecodedMode>(config.decodedMode);
 	const [errors, setErrors] = useState<string[]>([]);
 
 	const handleApply = useCallback(() => {
@@ -50,6 +54,8 @@ export function SettingsPanel({
 			unitSize,
 			endianness,
 			totalSize: Math.min(Math.max(parsedSize, MIN_TOTAL_SIZE), MAX_TOTAL_SIZE),
+			numberFormat,
+			decodedMode,
 		};
 
 		const configErrors = validateConfig(newConfig);
@@ -65,13 +71,15 @@ export function SettingsPanel({
 
 		setErrors([]);
 		onApply(newConfig, target.trim());
-	}, [columns, unitSize, endianness, totalSizeInput, target, onApply]);
+	}, [columns, unitSize, endianness, totalSizeInput, numberFormat, decodedMode, target, onApply]);
 
 	const hasChanges =
 		target !== currentTarget ||
 		columns !== config.columns ||
 		unitSize !== config.unitSize ||
 		endianness !== config.endianness ||
+		numberFormat !== config.numberFormat ||
+		decodedMode !== config.decodedMode ||
 		parseByteSize(totalSizeInput) !== config.totalSize;
 
 	return (
@@ -108,52 +116,94 @@ export function SettingsPanel({
 					<span style={styles.hint}>e.g., 256, 1KB, 4MB</span>
 				</div>
 
-				{/* Columns */}
+				{/* Two-column layout for smaller fields */}
+				<div style={styles.row}>
+					{/* Columns */}
+					<div style={styles.halfField}>
+						<label style={styles.label}>Columns</label>
+						<select
+							value={columns}
+							onChange={(e) => setColumns(Number(e.target.value))}
+							style={styles.select}
+							disabled={disabled}
+						>
+							{VALID_COLUMNS.map((c) => (
+								<option key={c} value={c}>
+									{c}
+								</option>
+							))}
+						</select>
+					</div>
+
+					{/* Unit Size */}
+					<div style={styles.halfField}>
+						<label style={styles.label}>Unit Size</label>
+						<select
+							value={unitSize}
+							onChange={(e) => setUnitSize(Number(e.target.value) as UnitSize)}
+							style={styles.select}
+							disabled={disabled}
+						>
+							{VALID_UNIT_SIZES.map((s) => (
+								<option key={s} value={s}>
+									{s}B ({unitSizeLabel(s)})
+								</option>
+							))}
+						</select>
+					</div>
+				</div>
+
+				<div style={styles.row}>
+					{/* Endianness */}
+					<div style={styles.halfField}>
+						<label style={styles.label}>Byte Order</label>
+						<select
+							value={endianness}
+							onChange={(e) => setEndianness(e.target.value as Endianness)}
+							style={styles.select}
+							disabled={disabled}
+						>
+							<option value="little">Little</option>
+							<option value="big">Big</option>
+						</select>
+					</div>
+
+					{/* Number Format */}
+					<div style={styles.halfField}>
+						<label style={styles.label}>Number Format</label>
+						<select
+							value={numberFormat}
+							onChange={(e) => setNumberFormat(e.target.value as NumberFormat)}
+							style={styles.select}
+							disabled={disabled}
+						>
+							{VALID_NUMBER_FORMATS.map((f) => (
+								<option key={f} value={f}>
+									{formatLabel(f)}
+								</option>
+							))}
+						</select>
+					</div>
+				</div>
+
+				{/* Decoded Mode */}
 				<div style={styles.field}>
-					<label style={styles.label}>Columns</label>
+					<label style={styles.label}>Decoded Column</label>
 					<select
-						value={columns}
-						onChange={(e) => setColumns(Number(e.target.value))}
+						value={decodedMode}
+						onChange={(e) => setDecodedMode(e.target.value as DecodedMode)}
 						style={styles.select}
-						disabled={disabled}
+						disabled={disabled || unitSize !== 1}
 					>
-						{VALID_COLUMNS.map((c) => (
-							<option key={c} value={c}>
-								{c}
+						{VALID_DECODED_MODES.map((m) => (
+							<option key={m} value={m}>
+								{decodedModeLabel(m)}
 							</option>
 						))}
 					</select>
-				</div>
-
-				{/* Unit Size */}
-				<div style={styles.field}>
-					<label style={styles.label}>Unit Size</label>
-					<select
-						value={unitSize}
-						onChange={(e) => setUnitSize(Number(e.target.value) as UnitSize)}
-						style={styles.select}
-						disabled={disabled}
-					>
-						{VALID_UNIT_SIZES.map((s) => (
-							<option key={s} value={s}>
-								{s} byte{s > 1 ? 's' : ''} ({unitSizeLabel(s)})
-							</option>
-						))}
-					</select>
-				</div>
-
-				{/* Endianness */}
-				<div style={styles.field}>
-					<label style={styles.label}>Byte Order</label>
-					<select
-						value={endianness}
-						onChange={(e) => setEndianness(e.target.value as Endianness)}
-						style={styles.select}
-						disabled={disabled}
-					>
-						<option value="little">Little Endian</option>
-						<option value="big">Big Endian</option>
-					</select>
+					{unitSize !== 1 && (
+						<span style={styles.hint}>Only available with 1-byte unit size</span>
+					)}
 				</div>
 
 				{/* Errors */}
@@ -199,6 +249,42 @@ function unitSizeLabel(size: UnitSize): string {
 			return 'DWord';
 		case 8:
 			return 'QWord';
+		case 16:
+			return 'OWord';
+		default:
+			return `${size}B`;
+	}
+}
+
+function formatLabel(format: NumberFormat): string {
+	switch (format) {
+		case 'hex':
+			return 'Hexadecimal';
+		case 'dec':
+			return 'Decimal';
+		case 'oct':
+			return 'Octal';
+		case 'bin':
+			return 'Binary';
+		default:
+			return format;
+	}
+}
+
+function decodedModeLabel(mode: DecodedMode): string {
+	switch (mode) {
+		case 'ascii':
+			return 'ASCII';
+		case 'uint8':
+			return 'Unsigned (0-255)';
+		case 'int8':
+			return 'Signed (-128..127)';
+		case 'bin':
+			return 'Binary';
+		case 'hidden':
+			return 'Hidden';
+		default:
+			return mode;
 	}
 }
 
@@ -224,10 +310,20 @@ const styles: Record<string, CSSProperties> = {
 		flexDirection: 'column',
 		gap: '10px',
 	},
+	row: {
+		display: 'flex',
+		gap: '12px',
+	},
 	field: {
 		display: 'flex',
 		flexDirection: 'column',
 		gap: '4px',
+	},
+	halfField: {
+		display: 'flex',
+		flexDirection: 'column',
+		gap: '4px',
+		flex: 1,
 	},
 	label: {
 		fontSize: '12px',

@@ -50,9 +50,19 @@ export class VscodeSessionTracker implements SessionTracker {
 		// Track active stack item changes - this fires when stopped at breakpoint
 		this.disposables.push(
 			vscode.debug.onDidChangeActiveStackItem(() => {
-				// If we have a stack item, the session is stopped
-				if (vscode.debug.activeStackItem && this.state.sessionId) {
-					this.updateState({ ...this.state, status: 'stopped' });
+				if (!this.state.sessionId) {
+					return;
+				}
+				// Stack item present => stopped, absent => running
+				if (vscode.debug.activeStackItem) {
+					if (this.state.status === 'stopped') {
+						// Emit again on each stop/frame change so views can refresh dynamic expressions.
+						this.emitState();
+					} else {
+						this.updateState({ ...this.state, status: 'stopped' });
+					}
+				} else {
+					this.updateState({ ...this.state, status: 'running' });
 				}
 			})
 		);
@@ -121,8 +131,10 @@ export class VscodeSessionTracker implements SessionTracker {
 	 */
 	async refresh(): Promise<SessionState> {
 		const session = vscode.debug.activeDebugSession;
-		if (session && this.state.sessionId === session.id) {
+		if (session) {
 			await this.probeSessionState(session);
+		} else if (this.state.sessionId !== null || this.state.status !== 'none') {
+			this.updateState({ sessionId: null, status: 'none' });
 		}
 		return this.state;
 	}
@@ -134,9 +146,13 @@ export class VscodeSessionTracker implements SessionTracker {
 
 		if (changed) {
 			this.state = newState;
-			for (const listener of this.listeners) {
-				listener(this.state);
-			}
+			this.emitState();
+		}
+	}
+
+	private emitState(): void {
+		for (const listener of this.listeners) {
+			listener(this.state);
 		}
 	}
 

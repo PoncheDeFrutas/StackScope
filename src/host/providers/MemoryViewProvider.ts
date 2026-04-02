@@ -2,10 +2,13 @@ import * as vscode from 'vscode';
 import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 
 /**
- * Webview provider for StackScope memory view panel.
+ * Webview view provider for StackScope memory panel.
+ * Registers as a panel view (alongside Terminal, Debug Console, etc.)
  */
-export class MemoryViewProvider {
-	private panel: vscode.WebviewPanel | null = null;
+export class MemoryViewProvider implements vscode.WebviewViewProvider {
+	public static readonly viewType = 'stackscope.memoryView';
+
+	private view: vscode.WebviewView | null = null;
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
@@ -13,49 +16,58 @@ export class MemoryViewProvider {
 	) {}
 
 	/**
-	 * Shows the memory view panel.
+	 * Called when the view is first shown.
 	 */
-	show(): void {
-		if (this.panel) {
-			this.panel.reveal(vscode.ViewColumn.Beside);
-			return;
-		}
+	resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		_context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken
+	): void {
+		this.view = webviewView;
 
-		this.panel = vscode.window.createWebviewPanel(
-			'stackscope.memoryView',
-			'StackScope Memory',
-			vscode.ViewColumn.Beside,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true,
-				localResourceRoots: [
-					vscode.Uri.joinPath(this.extensionUri, 'dist'),
-				],
-			}
-		);
+		webviewView.webview.options = {
+			enableScripts: true,
+			localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist')],
+		};
 
-		this.panel.webview.html = this.getHtmlContent(this.panel.webview);
-		this.messageRouter.attach(this.panel.webview);
+		webviewView.webview.html = this.getHtmlContent(webviewView.webview);
+		this.messageRouter.attach(webviewView.webview);
 
-		this.panel.onDidDispose(() => {
+		webviewView.onDidDispose(() => {
 			this.messageRouter.detach();
-			this.panel = null;
+			this.view = null;
+		});
+
+		// Re-attach when view becomes visible again
+		webviewView.onDidChangeVisibility(() => {
+			if (webviewView.visible && this.view) {
+				this.messageRouter.attach(webviewView.webview);
+			}
 		});
 	}
 
 	/**
-	 * Checks if the panel is currently visible.
+	 * Reveals/focuses the panel view.
 	 */
-	isVisible(): boolean {
-		return this.panel?.visible ?? false;
+	focus(): void {
+		if (this.view) {
+			this.view.show(true);
+		}
 	}
 
 	/**
-	 * Disposes the panel.
+	 * Checks if the view is currently visible.
+	 */
+	isVisible(): boolean {
+		return this.view?.visible ?? false;
+	}
+
+	/**
+	 * Disposes the provider.
 	 */
 	dispose(): void {
-		this.panel?.dispose();
-		this.panel = null;
+		this.messageRouter.detach();
+		this.view = null;
 	}
 
 	private getHtmlContent(webview: vscode.Webview): string {
@@ -79,7 +91,7 @@ export class MemoryViewProvider {
 			font-family: var(--vscode-font-family);
 			font-size: var(--vscode-font-size);
 			color: var(--vscode-foreground);
-			background-color: var(--vscode-editor-background);
+			background-color: var(--vscode-panel-background, var(--vscode-editor-background));
 		}
 	</style>
 </head>
