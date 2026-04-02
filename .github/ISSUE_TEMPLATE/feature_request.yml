@@ -1,0 +1,70 @@
+name: Feature request
+description: Suggest an improvement for StackScope
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement.
+
+        Please be as concrete as possible so we can prioritize effectively.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What workflow limitation are you hitting?
+      placeholder: I cannot easily ... when debugging ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe behavior, UX, and expected outcome
+      placeholder: Add a way to ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: Workarounds or other approaches
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - Memory view
+        - Register panel
+        - Register set editor
+        - Presets
+        - Session / call stack integration
+        - UX / accessibility
+        - Architecture / API
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: alignment
+    attributes:
+      label: Alignment with current and future scope
+      description: Select any that apply
+      options:
+        - label: Improves existing V1 capabilities (memory, registers, presets)
+        - label: Relates to planned call stack improvements
+        - label: Relates to planned hex-to-decoded cross-highlighting UX
+        - label: Inspired by behavior from other tools (for example mcu-debug/memview)
+  - type: textarea
+    id: references
+    attributes:
+      label: References (optional)
+      description: Links, screenshots, prior art, related issues
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who benefits and how often this would be used
+    validations:
+      required: true
