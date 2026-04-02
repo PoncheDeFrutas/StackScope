@@ -8,7 +8,6 @@ const watch = process.argv.includes('--watch');
  */
 const esbuildProblemMatcherPlugin = {
 	name: 'esbuild-problem-matcher',
-
 	setup(build) {
 		build.onStart(() => {
 			console.log('[watch] build started');
@@ -16,37 +15,53 @@ const esbuildProblemMatcherPlugin = {
 		build.onEnd((result) => {
 			result.errors.forEach(({ text, location }) => {
 				console.error(`✘ [ERROR] ${text}`);
-				console.error(`    ${location.file}:${location.line}:${location.column}:`);
+				if (location) {
+					console.error(`    ${location.file}:${location.line}:${location.column}:`);
+				}
 			});
 			console.log('[watch] build finished');
 		});
 	},
 };
 
+/** @type {import('esbuild').BuildOptions} */
+const extensionConfig = {
+	entryPoints: ['src/extension.ts'],
+	bundle: true,
+	format: 'cjs',
+	minify: production,
+	sourcemap: !production,
+	sourcesContent: false,
+	platform: 'node',
+	outfile: 'dist/extension.js',
+	external: ['vscode'],
+	logLevel: 'silent',
+	plugins: [esbuildProblemMatcherPlugin],
+};
+
+/** @type {import('esbuild').BuildOptions} */
+const webviewConfig = {
+	entryPoints: ['src/webview/main.tsx'],
+	bundle: true,
+	format: 'iife',
+	minify: production,
+	sourcemap: !production,
+	sourcesContent: false,
+	platform: 'browser',
+	outfile: 'dist/webview.js',
+	logLevel: 'silent',
+	plugins: [esbuildProblemMatcherPlugin],
+};
+
 async function main() {
-	const ctx = await esbuild.context({
-		entryPoints: [
-			'src/extension.ts'
-		],
-		bundle: true,
-		format: 'cjs',
-		minify: production,
-		sourcemap: !production,
-		sourcesContent: false,
-		platform: 'node',
-		outfile: 'dist/extension.js',
-		external: ['vscode'],
-		logLevel: 'silent',
-		plugins: [
-			/* add to the end of plugins array */
-			esbuildProblemMatcherPlugin,
-		],
-	});
+	const extensionCtx = await esbuild.context(extensionConfig);
+	const webviewCtx = await esbuild.context(webviewConfig);
+
 	if (watch) {
-		await ctx.watch();
+		await Promise.all([extensionCtx.watch(), webviewCtx.watch()]);
 	} else {
-		await ctx.rebuild();
-		await ctx.dispose();
+		await Promise.all([extensionCtx.rebuild(), webviewCtx.rebuild()]);
+		await Promise.all([extensionCtx.dispose(), webviewCtx.dispose()]);
 	}
 }
 
