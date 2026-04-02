@@ -1,21 +1,33 @@
 import type { CSSProperties } from 'react';
 
+/** Represents a byte value or null for unreadable memory */
+export type MemoryByte = number | null;
+
+export type UnitSize = 1 | 2 | 4 | 8;
+export type Endianness = 'little' | 'big';
+
 interface MemoryGridProps {
 	address: string;
-	data: number[];
-	bytesPerRow?: number;
+	data: MemoryByte[];
+	columns?: number;
+	unitSize?: UnitSize;
+	endianness?: Endianness;
 }
 
 /**
- * Renders memory as hex rows.
- * Each row shows: address | hex bytes | ASCII
+ * Renders memory as hex rows with ASCII decode.
+ * Supports unreadable bytes (shown as ~~), configurable columns,
+ * unit sizes (1/2/4/8 bytes), and endianness.
  */
 export function MemoryGrid({
 	address,
 	data,
-	bytesPerRow = 16,
+	columns = 16,
+	unitSize = 1,
+	endianness = 'little',
 }: MemoryGridProps): JSX.Element {
 	const baseAddress = parseAddress(address);
+	const bytesPerRow = columns * unitSize;
 	const rows: JSX.Element[] = [];
 
 	for (let i = 0; i < data.length; i += bytesPerRow) {
@@ -26,7 +38,9 @@ export function MemoryGrid({
 				key={i}
 				address={rowAddress}
 				bytes={rowBytes}
-				bytesPerRow={bytesPerRow}
+				columns={columns}
+				unitSize={unitSize}
+				endianness={endianness}
 			/>
 		);
 	}
@@ -37,9 +51,9 @@ export function MemoryGrid({
 				<thead>
 					<tr style={styles.headerRow}>
 						<th style={styles.addressHeader}>Address</th>
-						<HeaderCells type="hex" />
+						<HeaderCells type="hex" columns={columns} unitSize={unitSize} />
 						<th style={styles.spacer}></th>
-						<HeaderCells type="ascii" />
+						<HeaderCells type="ascii" columns={columns} unitSize={unitSize} />
 					</tr>
 				</thead>
 				<tbody>{rows}</tbody>
@@ -48,51 +62,104 @@ export function MemoryGrid({
 	);
 }
 
-function HeaderCells({ type }: { type: 'hex' | 'ascii' }): JSX.Element {
+interface HeaderCellsProps {
+	type: 'hex' | 'ascii';
+	columns: number;
+	unitSize: UnitSize;
+}
+
+function HeaderCells({ type, columns, unitSize }: HeaderCellsProps): JSX.Element {
 	const cells: JSX.Element[] = [];
-	for (let i = 0; i < 16; i++) {
-		const label = i.toString(16).toUpperCase().padStart(2, '0');
-		// Add extra gap after byte 7
-		const style = i === 8 
-			? { ...styles.headerCell, ...(type === 'hex' ? styles.hexCell : styles.asciiCell), paddingLeft: '12px' }
-			: { ...styles.headerCell, ...(type === 'hex' ? styles.hexCell : styles.asciiCell) };
-		cells.push(
-			<th key={`${type}-${i}`} style={style}>
-				{label}
-			</th>
-		);
+	const bytesPerRow = columns * unitSize;
+	const midPoint = Math.floor(columns / 2);
+
+	if (type === 'hex') {
+		// For hex, show unit-based offsets
+		for (let i = 0; i < columns; i++) {
+			const offset = i * unitSize;
+			const label = offset.toString(16).toUpperCase().padStart(2, '0');
+			const isAfterMid = i === midPoint;
+			const style = isAfterMid
+				? { ...styles.headerCell, ...styles.hexCell, paddingLeft: '12px' }
+				: { ...styles.headerCell, ...styles.hexCell };
+			cells.push(
+				<th key={`hex-${i}`} style={style}>
+					{label}
+				</th>
+			);
+		}
+	} else {
+		// For ASCII, show byte offsets
+		for (let i = 0; i < bytesPerRow; i++) {
+			const label = i.toString(16).toUpperCase().padStart(2, '0');
+			const midByte = Math.floor(bytesPerRow / 2);
+			const isAfterMid = i === midByte;
+			const style = isAfterMid
+				? { ...styles.headerCell, ...styles.asciiCell, paddingLeft: '8px' }
+				: { ...styles.headerCell, ...styles.asciiCell };
+			cells.push(
+				<th key={`ascii-${i}`} style={style}>
+					{label}
+				</th>
+			);
+		}
 	}
 	return <>{cells}</>;
 }
 
 interface MemoryRowProps {
 	address: bigint;
-	bytes: number[];
-	bytesPerRow: number;
+	bytes: MemoryByte[];
+	columns: number;
+	unitSize: UnitSize;
+	endianness: Endianness;
 }
 
-function MemoryRow({ address, bytes, bytesPerRow }: MemoryRowProps): JSX.Element {
+function MemoryRow({ address, bytes, columns, unitSize, endianness }: MemoryRowProps): JSX.Element {
 	const hexCells: JSX.Element[] = [];
 	const asciiCells: JSX.Element[] = [];
+	const bytesPerRow = columns * unitSize;
+	const midPoint = Math.floor(columns / 2);
+	const midByte = Math.floor(bytesPerRow / 2);
 
-	for (let i = 0; i < bytesPerRow; i++) {
-		const byte = i < bytes.length ? bytes[i] : null;
-		const hexValue = byte !== null ? byte.toString(16).padStart(2, '0').toUpperCase() : '  ';
-		const asciiValue = byte !== null ? (isPrintable(byte) ? String.fromCharCode(byte) : '.') : ' ';
+	// Build hex cells (grouped by unitSize)
+	for (let col = 0; col < columns; col++) {
+		const startIdx = col * unitSize;
+		const unitBytes = bytes.slice(startIdx, startIdx + unitSize);
+		const hexValue = formatUnit(unitBytes, unitSize, endianness);
+		const isUnreadable = unitBytes.some((b) => b === null);
+		const isAfterMid = col === midPoint;
 
-		// Add extra gap after byte 7
-		const hexStyle = i === 8 
-			? { ...styles.hexCell, paddingLeft: '12px' }
-			: styles.hexCell;
-		const asciiStyle = i === 8 
-			? { ...styles.asciiCell, paddingLeft: '12px' }
-			: styles.asciiCell;
+		const hexStyle: CSSProperties = {
+			...styles.hexCell,
+			...(isAfterMid ? { paddingLeft: '12px' } : {}),
+			...(isUnreadable ? styles.unreadableCell : {}),
+		};
 
 		hexCells.push(
-			<td key={`hex-${i}`} style={hexStyle}>{hexValue}</td>
+			<td key={`hex-${col}`} style={hexStyle}>
+				{hexValue}
+			</td>
 		);
+	}
+
+	// Build ASCII cells (always byte-by-byte)
+	for (let i = 0; i < bytesPerRow; i++) {
+		const byte = i < bytes.length ? bytes[i] : null;
+		const asciiValue = formatAsciiByte(byte);
+		const isUnreadable = byte === null;
+		const isAfterMid = i === midByte;
+
+		const asciiStyle: CSSProperties = {
+			...styles.asciiCell,
+			...(isAfterMid ? { paddingLeft: '8px' } : {}),
+			...(isUnreadable ? styles.unreadableAscii : {}),
+		};
+
 		asciiCells.push(
-			<td key={`ascii-${i}`} style={asciiStyle}>{asciiValue}</td>
+			<td key={`ascii-${i}`} style={asciiStyle}>
+				{asciiValue}
+			</td>
 		);
 	}
 
@@ -106,6 +173,26 @@ function MemoryRow({ address, bytes, bytesPerRow }: MemoryRowProps): JSX.Element
 	);
 }
 
+function formatUnit(bytes: MemoryByte[], unitSize: UnitSize, endianness: Endianness): string {
+	// Check if any byte is unreadable
+	if (bytes.length === 0 || bytes.some((b) => b === null)) {
+		// Return ~~ pattern for unreadable
+		return '~'.repeat(unitSize * 2);
+	}
+
+	// Reorder bytes based on endianness for display
+	const orderedBytes = endianness === 'little' ? [...bytes].reverse() : bytes;
+
+	return orderedBytes.map((b) => (b as number).toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
+function formatAsciiByte(byte: MemoryByte): string {
+	if (byte === null) {
+		return '~';
+	}
+	return isPrintable(byte) ? String.fromCharCode(byte) : '.';
+}
+
 function parseAddress(addr: string): bigint {
 	const cleaned = addr.trim().toLowerCase();
 	if (cleaned.startsWith('0x')) {
@@ -115,7 +202,8 @@ function parseAddress(addr: string): bigint {
 }
 
 function formatAddress(addr: bigint): string {
-	return '0x' + addr.toString(16).padStart(8, '0').toUpperCase();
+	// Use 16 chars for 64-bit addresses
+	return '0x' + addr.toString(16).padStart(16, '0').toUpperCase();
 }
 
 function isPrintable(byte: number): boolean {
@@ -157,19 +245,28 @@ const styles: Record<string, CSSProperties> = {
 		color: 'var(--vscode-debugTokenExpression-number)',
 		paddingRight: '16px',
 		textAlign: 'left',
+		whiteSpace: 'nowrap',
 	},
 	hexCell: {
 		color: 'var(--vscode-foreground)',
 		padding: '2px 4px',
 		textAlign: 'center',
-		width: '20px',
+		fontFamily: 'var(--vscode-editor-font-family, Consolas, monospace)',
 	},
 	asciiCell: {
 		color: 'var(--vscode-debugTokenExpression-string)',
-		padding: '2px 4px',
+		padding: '2px 2px',
 		textAlign: 'center',
-		width: '20px',
+		width: '12px',
 		backgroundColor: 'var(--vscode-editor-inactiveSelectionBackground)',
+	},
+	unreadableCell: {
+		color: 'var(--vscode-disabledForeground)',
+		opacity: 0.6,
+	},
+	unreadableAscii: {
+		color: 'var(--vscode-disabledForeground)',
+		opacity: 0.6,
 	},
 	spacer: {
 		width: '16px',

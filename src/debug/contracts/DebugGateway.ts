@@ -4,10 +4,16 @@
 export interface ReadMemoryResult {
 	/** Base address that was read (hex string). */
 	address: string;
-	/** Memory bytes as array of numbers (0-255). */
-	data: number[];
+	/** 
+	 * Memory bytes as array.
+	 * - Numbers (0-255) for readable bytes
+	 * - null for unreadable bytes  
+	 */
+	data: (number | null)[];
 	/** Actual number of bytes returned. */
 	bytesRead: number;
+	/** True if some bytes could not be read. */
+	hasUnreadable: boolean;
 }
 
 /**

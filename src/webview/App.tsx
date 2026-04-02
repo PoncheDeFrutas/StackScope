@@ -4,7 +4,10 @@ import { messageBus } from './rpc/WebviewMessageBus.js';
 import { MemoryGrid } from './components/MemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Toolbar } from './components/Toolbar.js';
-import type { SessionSnapshot, DocumentSnapshot } from '../protocol/methods.js';
+import { SettingsPanel } from './components/SettingsPanel.js';
+import type { SessionSnapshot, DocumentSnapshot, PresetSnapshot } from '../protocol/methods.js';
+import type { MemoryViewConfig } from '../domain/config/MemoryViewConfig.js';
+import { DEFAULT_CONFIG } from '../domain/config/MemoryViewConfig.js';
 
 type AppState =
 	| { phase: 'loading' }
@@ -16,7 +19,7 @@ type AppState =
 			phase: 'ready';
 			session: SessionSnapshot;
 			document: DocumentSnapshot;
-			memory: { address: string; data: number[] };
+			memory: { address: string; data: (number | null)[] };
 	  }
 	| { phase: 'error'; session: SessionSnapshot; document: DocumentSnapshot | null; error: string };
 
@@ -24,6 +27,11 @@ const INITIAL_BYTE_COUNT = 256;
 
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
+	const [config, setConfig] = useState<MemoryViewConfig>(DEFAULT_CONFIG);
+	const [presets, setPresets] = useState<PresetSnapshot[]>([]);
+	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+	const [showSettings, setShowSettings] = useState(false);
+	const [currentTarget, setCurrentTarget] = useState('');
 
 	useEffect(() => {
 		// Subscribe to session changes
@@ -79,6 +87,9 @@ export function App(): JSX.Element {
 	async function init(): Promise<void> {
 		try {
 			const result = await HostClient.init();
+			
+			// Store presets from init
+			setPresets(result.presets);
 
 			if (!result.session.sessionId) {
 				setState({ phase: 'no-session' });
@@ -90,6 +101,7 @@ export function App(): JSX.Element {
 				return;
 			}
 
+			setCurrentTarget(result.activeDocument.address);
 			setState({
 				phase: 'loading-memory',
 				session: result.session,
@@ -133,6 +145,8 @@ export function App(): JSX.Element {
 	}
 
 	const handleOpenDocument = useCallback(async (target: string) => {
+		setCurrentTarget(target);
+		setSelectedPresetId(null); // Clear preset selection when opening custom target
 		setState((prev) => {
 			if ('session' in prev) {
 				return { phase: 'opening-document', session: prev.session };
@@ -167,6 +181,38 @@ export function App(): JSX.Element {
 		}
 	}, []);
 
+	const handleSelectPreset = useCallback((preset: PresetSnapshot | null) => {
+		if (preset) {
+			setSelectedPresetId(preset.id);
+			setCurrentTarget(preset.target);
+			handleOpenDocument(preset.target);
+		} else {
+			setSelectedPresetId(null);
+		}
+	}, [handleOpenDocument]);
+
+	const handleSavePreset = useCallback(async (name: string, target: string) => {
+		try {
+			const result = await HostClient.savePreset(name, target);
+			setPresets((prev) => [...prev, result.preset]);
+			setSelectedPresetId(result.preset.id);
+		} catch (err) {
+			console.error('Failed to save preset:', err);
+		}
+	}, []);
+
+	const handleDeletePreset = useCallback(async (id: string) => {
+		try {
+			await HostClient.deletePreset(id);
+			setPresets((prev) => prev.filter((p) => p.id !== id));
+			if (selectedPresetId === id) {
+				setSelectedPresetId(null);
+			}
+		} catch (err) {
+			console.error('Failed to delete preset:', err);
+		}
+	}, [selectedPresetId]);
+
 	const handleRefresh = useCallback(() => {
 		if (state.phase === 'ready') {
 			setState({
@@ -177,6 +223,25 @@ export function App(): JSX.Element {
 		}
 	}, [state]);
 
+	const handleToggleSettings = useCallback(() => {
+		setShowSettings((prev) => !prev);
+	}, []);
+
+	const handleApplySettings = useCallback((newConfig: MemoryViewConfig, target: string) => {
+		setConfig(newConfig);
+		setShowSettings(false);
+		if (target !== currentTarget) {
+			handleOpenDocument(target);
+		} else {
+			// Just reload with new config
+			handleRefresh();
+		}
+	}, [currentTarget, handleOpenDocument, handleRefresh]);
+
+	const handleCancelSettings = useCallback(() => {
+		setShowSettings(false);
+	}, []);
+
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || 
 		state.phase === 'opening-document' || 
@@ -186,11 +251,28 @@ export function App(): JSX.Element {
 		<div style={styles.container}>
 			<Toolbar
 				sessionStatus={sessionStatus}
+				presets={presets}
+				selectedPresetId={selectedPresetId}
 				onOpenDocument={handleOpenDocument}
+				onSelectPreset={handleSelectPreset}
+				onSavePreset={handleSavePreset}
+				onDeletePreset={handleDeletePreset}
 				onRefresh={handleRefresh}
+				onToggleSettings={handleToggleSettings}
 				isLoading={isLoading}
+				showSettings={showSettings}
+				currentTarget={currentTarget}
 			/>
-			<div style={styles.content}>{renderContent(state)}</div>
+			{showSettings && (
+				<SettingsPanel
+					config={config}
+					currentTarget={currentTarget}
+					onApply={handleApplySettings}
+					onCancel={handleCancelSettings}
+					disabled={sessionStatus !== 'stopped'}
+				/>
+			)}
+			<div style={styles.content}>{renderContent(state, config)}</div>
 			<StatusBar
 				status={sessionStatus}
 				sessionId={'session' in state ? state.session.sessionId : null}
@@ -201,7 +283,7 @@ export function App(): JSX.Element {
 	);
 }
 
-function renderContent(state: AppState): JSX.Element {
+function renderContent(state: AppState, config: MemoryViewConfig): JSX.Element {
 	switch (state.phase) {
 		case 'loading':
 			return <Message>Loading...</Message>;
@@ -240,7 +322,15 @@ function renderContent(state: AppState): JSX.Element {
 			return <Message>Reading memory...</Message>;
 
 		case 'ready':
-			return <MemoryGrid address={state.memory.address} data={state.memory.data} />;
+			return (
+				<MemoryGrid
+					address={state.memory.address}
+					data={state.memory.data}
+					columns={config.columns}
+					unitSize={config.unitSize}
+					endianness={config.endianness}
+				/>
+			);
 
 		case 'error':
 			return <Message error>{state.error}</Message>;

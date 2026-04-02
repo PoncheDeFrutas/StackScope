@@ -6,8 +6,10 @@ import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js
 import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
+import type { PresetService } from '../services/PresetService.js';
 import { createMemoryDocument } from '../../domain/documents/MemoryDocument.js';
 import { generateDocumentId } from '../../shared/ids.js';
+import { isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
 
 type MethodHandler<M extends MethodName> = (
 	params: MethodMap[M]['params']
@@ -26,7 +28,8 @@ export class HostMessageRouter {
 	constructor(
 		private readonly sessionTracker: SessionTracker,
 		private readonly debugGateway: DebugGateway,
-		private readonly documentRegistry: DocumentRegistry
+		private readonly documentRegistry: DocumentRegistry,
+		private readonly presetService: PresetService
 	) {
 		this.registerHandlers();
 	}
@@ -75,10 +78,11 @@ export class HostMessageRouter {
 	}
 
 	private registerHandlers(): void {
-		// Init handler - refresh session state before returning
+		// Init handler - refresh session state and return presets
 		this.handlers.set('init', async () => {
 			const state = await this.sessionTracker.refresh();
 			const activeDoc = this.documentRegistry.getActive();
+			const presets = this.presetService.getAll();
 
 			return {
 				session: {
@@ -92,6 +96,13 @@ export class HostMessageRouter {
 							sessionId: activeDoc.sessionId,
 						}
 					: null,
+				presets: presets.map((p) => ({
+					id: p.id,
+					name: p.name,
+					target: p.target,
+					description: p.description,
+					isBuiltin: isBuiltinPreset(p),
+				})),
 			};
 		});
 
@@ -210,6 +221,42 @@ export class HostMessageRouter {
 					sessionId: doc.sessionId,
 				},
 			};
+		});
+
+		// ListPresets handler
+		this.handlers.set('listPresets', async () => {
+			const presets = this.presetService.getAll();
+			return {
+				presets: presets.map((p) => ({
+					id: p.id,
+					name: p.name,
+					target: p.target,
+					description: p.description,
+					isBuiltin: isBuiltinPreset(p),
+				})),
+			};
+		});
+
+		// SavePreset handler
+		this.handlers.set('savePreset', async (params) => {
+			const { name, target, description } = params as MethodMap['savePreset']['params'];
+			const preset = this.presetService.save(name, target, description);
+			return {
+				preset: {
+					id: preset.id,
+					name: preset.name,
+					target: preset.target,
+					description: preset.description,
+					isBuiltin: false,
+				},
+			};
+		});
+
+		// DeletePreset handler
+		this.handlers.set('deletePreset', async (params) => {
+			const { id } = params as MethodMap['deletePreset']['params'];
+			const success = this.presetService.delete(id);
+			return { success };
 		});
 	}
 

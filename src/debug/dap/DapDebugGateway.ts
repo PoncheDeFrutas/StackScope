@@ -27,22 +27,39 @@ export class DapDebugGateway implements DebugGateway {
 				count,
 			});
 
-			if (!response || !response.data) {
-				return null;
+			if (!response) {
+				// Complete failure - return array of nulls to indicate unreadable
+				return this.createUnreadableResult(memoryReference, offset, count);
+			}
+
+			if (!response.data) {
+				// No data returned - treat as unreadable
+				return this.createUnreadableResult(memoryReference, offset, count);
 			}
 
 			// DAP returns data as base64 encoded string
 			const base64Data: string = response.data;
 			const bytes = this.decodeBase64(base64Data);
 
+			// Check if we got fewer bytes than requested
+			const hasUnreadable = bytes.length < count;
+			
+			// Pad with nulls if fewer bytes returned
+			const paddedData: (number | null)[] = [...bytes];
+			while (paddedData.length < count) {
+				paddedData.push(null);
+			}
+
 			return {
 				address: response.address ?? memoryReference,
-				data: bytes,
+				data: paddedData,
 				bytesRead: bytes.length,
+				hasUnreadable,
 			};
 		} catch (err) {
 			console.error('[DapDebugGateway] readMemory failed:', err);
-			return null;
+			// Return unreadable result instead of null to show the grid with ~~ markers
+			return this.createUnreadableResult(memoryReference, offset, count);
 		}
 	}
 
@@ -72,5 +89,27 @@ export class DapDebugGateway implements DebugGateway {
 		// Node.js Buffer is available in VS Code extension host
 		const buffer = Buffer.from(base64, 'base64');
 		return Array.from(buffer);
+	}
+
+	private createUnreadableResult(
+		memoryReference: string,
+		offset: number,
+		count: number
+	): ReadMemoryResult {
+		// Calculate the address including offset
+		let address = memoryReference;
+		try {
+			const baseAddr = BigInt(memoryReference);
+			address = '0x' + (baseAddr + BigInt(offset)).toString(16);
+		} catch {
+			// Keep original reference if parsing fails
+		}
+
+		return {
+			address,
+			data: new Array(count).fill(null),
+			bytesRead: 0,
+			hasUnreadable: true,
+		};
 	}
 }

@@ -10,7 +10,7 @@ let services: HostServices | null = null;
 export function activate(context: vscode.ExtensionContext): void {
 	console.log('StackScope: Activating...');
 
-	services = createHostServices(context.extensionUri);
+	services = createHostServices(context.extensionUri, context);
 
 	// Register commands
 	context.subscriptions.push(

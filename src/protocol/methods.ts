@@ -15,6 +15,17 @@ export interface DocumentSnapshot {
 	sessionId: string;
 }
 
+/**
+ * Memory preset snapshot for webview.
+ */
+export interface PresetSnapshot {
+	id: string;
+	name: string;
+	target: string;
+	description?: string;
+	isBuiltin: boolean;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Init method
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,6 +37,7 @@ export interface InitParams {
 export interface InitResult {
 	session: SessionSnapshot;
 	activeDocument: DocumentSnapshot | null;
+	presets: PresetSnapshot[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,10 +53,16 @@ export interface ReadMemoryParams {
 export interface ReadMemoryResult {
 	/** Base address that was read (hex string). */
 	address: string;
-	/** Memory bytes as array of numbers (0-255). */
-	data: number[];
+	/** 
+	 * Memory bytes as array. 
+	 * - Numbers (0-255) for readable bytes
+	 * - null for unreadable bytes
+	 */
+	data: (number | null)[];
 	/** Actual number of bytes returned (may be less than requested). */
 	bytesRead: number;
+	/** True if some bytes could not be read. */
+	hasUnreadable: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,10 +84,46 @@ export interface OpenDocumentResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Preset methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ListPresetsParams {
+	/* empty */
+}
+
+export interface ListPresetsResult {
+	presets: PresetSnapshot[];
+}
+
+export interface SavePresetParams {
+	name: string;
+	target: string;
+	description?: string;
+}
+
+export interface SavePresetResult {
+	preset: PresetSnapshot;
+}
+
+export interface DeletePresetParams {
+	id: string;
+}
+
+export interface DeletePresetResult {
+	success: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Method names (string literal union)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MethodName = 'init' | 'readMemory' | 'openDocument';
+export type MethodName = 
+	| 'init' 
+	| 'readMemory' 
+	| 'openDocument'
+	| 'listPresets'
+	| 'savePreset'
+	| 'deletePreset';
 
 /**
  * Maps method names to their param/result types.
@@ -78,4 +132,7 @@ export interface MethodMap {
 	init: { params: InitParams; result: InitResult };
 	readMemory: { params: ReadMemoryParams; result: ReadMemoryResult };
 	openDocument: { params: OpenDocumentParams; result: OpenDocumentResult };
+	listPresets: { params: ListPresetsParams; result: ListPresetsResult };
+	savePreset: { params: SavePresetParams; result: SavePresetResult };
+	deletePreset: { params: DeletePresetParams; result: DeletePresetResult };
 }
