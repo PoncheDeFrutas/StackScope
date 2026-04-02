@@ -5,6 +5,7 @@ import { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 import { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
 import { PresetService } from '../services/PresetService.js';
+import { RegisterSetService } from '../services/RegisterSetService.js';
 
 /**
  * Container for all host-level services.
@@ -14,6 +15,7 @@ export interface HostServices {
 	debugGateway: DapDebugGateway;
 	documentRegistry: DocumentRegistry;
 	presetService: PresetService;
+	registerSetService: RegisterSetService;
 	messageRouter: HostMessageRouter;
 	memoryViewProvider: MemoryViewProvider;
 }
@@ -30,11 +32,13 @@ export function createHostServices(
 	const debugGateway = new DapDebugGateway();
 	const documentRegistry = new DocumentRegistry();
 	const presetService = new PresetService(context);
+	const registerSetService = new RegisterSetService(context);
 	const messageRouter = new HostMessageRouter(
 		sessionTracker,
 		debugGateway,
 		documentRegistry,
-		presetService
+		presetService,
+		registerSetService
 	);
 	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
 
@@ -43,6 +47,7 @@ export function createHostServices(
 		debugGateway,
 		documentRegistry,
 		presetService,
+		registerSetService,
 		messageRouter,
 		memoryViewProvider,
 	};

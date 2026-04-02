@@ -26,6 +26,35 @@ export interface PresetSnapshot {
 	isBuiltin: boolean;
 }
 
+/**
+ * Register item snapshot for webview.
+ */
+export interface RegisterItemSnapshot {
+	expression: string;
+	label?: string;
+}
+
+/**
+ * Register set snapshot for webview.
+ */
+export interface RegisterSetSnapshot {
+	id: string;
+	name: string;
+	registers: RegisterItemSnapshot[];
+	description?: string;
+	isBuiltin: boolean;
+}
+
+/**
+ * Register value snapshot after evaluation.
+ */
+export interface RegisterValueSnapshot {
+	expression: string;
+	label: string;
+	value: string | null;
+	error?: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Init method
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +67,8 @@ export interface InitResult {
 	session: SessionSnapshot;
 	activeDocument: DocumentSnapshot | null;
 	presets: PresetSnapshot[];
+	registerSets: RegisterSetSnapshot[];
+	selectedRegisterSetId: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +145,64 @@ export interface DeletePresetResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Register set methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ListRegisterSetsParams {
+	/* empty */
+}
+
+export interface ListRegisterSetsResult {
+	registerSets: RegisterSetSnapshot[];
+	selectedId: string;
+}
+
+export interface SaveRegisterSetParams {
+	name: string;
+	registers: RegisterItemSnapshot[];
+	description?: string;
+}
+
+export interface SaveRegisterSetResult {
+	registerSet: RegisterSetSnapshot;
+}
+
+export interface UpdateRegisterSetParams {
+	id: string;
+	name?: string;
+	registers?: RegisterItemSnapshot[];
+	description?: string;
+}
+
+export interface UpdateRegisterSetResult {
+	registerSet: RegisterSetSnapshot | null;
+}
+
+export interface DeleteRegisterSetParams {
+	id: string;
+}
+
+export interface DeleteRegisterSetResult {
+	success: boolean;
+}
+
+export interface SelectRegisterSetParams {
+	id: string;
+}
+
+export interface SelectRegisterSetResult {
+	success: boolean;
+}
+
+export interface ReadRegistersParams {
+	setId: string;
+}
+
+export interface ReadRegistersResult {
+	values: RegisterValueSnapshot[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Method names (string literal union)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -123,7 +212,13 @@ export type MethodName =
 	| 'openDocument'
 	| 'listPresets'
 	| 'savePreset'
-	| 'deletePreset';
+	| 'deletePreset'
+	| 'listRegisterSets'
+	| 'saveRegisterSet'
+	| 'updateRegisterSet'
+	| 'deleteRegisterSet'
+	| 'selectRegisterSet'
+	| 'readRegisters';
 
 /**
  * Maps method names to their param/result types.
@@ -135,4 +230,10 @@ export interface MethodMap {
 	listPresets: { params: ListPresetsParams; result: ListPresetsResult };
 	savePreset: { params: SavePresetParams; result: SavePresetResult };
 	deletePreset: { params: DeletePresetParams; result: DeletePresetResult };
+	listRegisterSets: { params: ListRegisterSetsParams; result: ListRegisterSetsResult };
+	saveRegisterSet: { params: SaveRegisterSetParams; result: SaveRegisterSetResult };
+	updateRegisterSet: { params: UpdateRegisterSetParams; result: UpdateRegisterSetResult };
+	deleteRegisterSet: { params: DeleteRegisterSetParams; result: DeleteRegisterSetResult };
+	selectRegisterSet: { params: SelectRegisterSetParams; result: SelectRegisterSetResult };
+	readRegisters: { params: ReadRegistersParams; result: ReadRegistersResult };
 }

@@ -17,6 +17,18 @@ export interface ReadMemoryResult {
 }
 
 /**
+ * Result of evaluating a single register.
+ */
+export interface RegisterEvalResult {
+	/** Register expression that was evaluated */
+	expression: string;
+	/** Resolved value as hex string, or null if unavailable */
+	value: string | null;
+	/** Error message if evaluation failed */
+	error?: string;
+}
+
+/**
  * Abstract contract for debugger memory operations.
  * All debugger access must go through this interface.
  */
@@ -48,4 +60,15 @@ export interface DebugGateway {
 		expression: string,
 		frameId?: number
 	): Promise<string | null>;
+
+	/**
+	 * Reads multiple register values.
+	 * @param sessionId - Debug session ID.
+	 * @param expressions - Array of register expressions to evaluate.
+	 * @returns Array of evaluation results, one per input expression.
+	 */
+	readRegisters(
+		sessionId: string,
+		expressions: string[]
+	): Promise<RegisterEvalResult[]>;
 }

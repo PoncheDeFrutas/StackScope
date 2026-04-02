@@ -6,6 +6,13 @@ import type {
 	ListPresetsResult,
 	SavePresetResult,
 	DeletePresetResult,
+	ListRegisterSetsResult,
+	SaveRegisterSetResult,
+	UpdateRegisterSetResult,
+	DeleteRegisterSetResult,
+	SelectRegisterSetResult,
+	ReadRegistersResult,
+	RegisterItemSnapshot,
 } from '../../protocol/methods.js';
 
 /**
@@ -62,5 +69,62 @@ export const HostClient = {
 	 */
 	async deletePreset(id: string): Promise<DeletePresetResult> {
 		return messageBus.request('deletePreset', { id });
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Register set methods
+	// ─────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Lists all available register sets (builtin + user).
+	 */
+	async listRegisterSets(): Promise<ListRegisterSetsResult> {
+		return messageBus.request('listRegisterSets', {});
+	},
+
+	/**
+	 * Saves a new user register set.
+	 */
+	async saveRegisterSet(
+		name: string,
+		registers: RegisterItemSnapshot[],
+		description?: string
+	): Promise<SaveRegisterSetResult> {
+		return messageBus.request('saveRegisterSet', { name, registers, description });
+	},
+
+	/**
+	 * Updates an existing user register set.
+	 */
+	async updateRegisterSet(
+		id: string,
+		updates: {
+			name?: string;
+			registers?: RegisterItemSnapshot[];
+			description?: string;
+		}
+	): Promise<UpdateRegisterSetResult> {
+		return messageBus.request('updateRegisterSet', { id, ...updates });
+	},
+
+	/**
+	 * Deletes a user register set by ID.
+	 */
+	async deleteRegisterSet(id: string): Promise<DeleteRegisterSetResult> {
+		return messageBus.request('deleteRegisterSet', { id });
+	},
+
+	/**
+	 * Selects a register set by ID.
+	 */
+	async selectRegisterSet(id: string): Promise<SelectRegisterSetResult> {
+		return messageBus.request('selectRegisterSet', { id });
+	},
+
+	/**
+	 * Reads all registers in the specified set.
+	 */
+	async readRegisters(setId: string): Promise<ReadRegistersResult> {
+		return messageBus.request('readRegisters', { setId });
 	},
 };

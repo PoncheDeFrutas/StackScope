@@ -7,12 +7,14 @@ import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import type { PresetService } from '../services/PresetService.js';
+import type { RegisterSetService } from '../services/RegisterSetService.js';
 import {
 	createMemoryDocument,
 	isLiteralAddress,
 } from '../../domain/documents/MemoryDocument.js';
 import { generateDocumentId } from '../../shared/ids.js';
 import { isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
+import { isBuiltinRegisterSet } from '../../domain/registers/RegisterSet.js';
 
 type MethodHandler<M extends MethodName> = (
 	params: MethodMap[M]['params']
@@ -32,7 +34,8 @@ export class HostMessageRouter {
 		private readonly sessionTracker: SessionTracker,
 		private readonly debugGateway: DebugGateway,
 		private readonly documentRegistry: DocumentRegistry,
-		private readonly presetService: PresetService
+		private readonly presetService: PresetService,
+		private readonly registerSetService: RegisterSetService
 	) {
 		this.registerHandlers();
 	}
@@ -81,11 +84,12 @@ export class HostMessageRouter {
 	}
 
 	private registerHandlers(): void {
-		// Init handler - refresh session state and return presets
+		// Init handler - refresh session state and return presets + register sets
 		this.handlers.set('init', async () => {
 			const state = await this.sessionTracker.refresh();
 			const activeDoc = this.documentRegistry.getActive();
 			const presets = this.presetService.getAll();
+			const registerSets = this.registerSetService.getAll();
 
 			return {
 				session: {
@@ -106,6 +110,17 @@ export class HostMessageRouter {
 					description: p.description,
 					isBuiltin: isBuiltinPreset(p),
 				})),
+				registerSets: registerSets.map((s) => ({
+					id: s.id,
+					name: s.name,
+					registers: s.registers.map((r) => ({
+						expression: r.expression,
+						label: r.label,
+					})),
+					description: s.description,
+					isBuiltin: isBuiltinRegisterSet(s),
+				})),
+				selectedRegisterSetId: this.registerSetService.getSelectedId(),
 			};
 		});
 
@@ -293,6 +308,128 @@ export class HostMessageRouter {
 			const { id } = params as MethodMap['deletePreset']['params'];
 			const success = this.presetService.delete(id);
 			return { success };
+		});
+
+		// ─────────────────────────────────────────────────────────────────────────
+		// Register set handlers
+		// ─────────────────────────────────────────────────────────────────────────
+
+		// ListRegisterSets handler
+		this.handlers.set('listRegisterSets', async () => {
+			const registerSets = this.registerSetService.getAll();
+			return {
+				registerSets: registerSets.map((s) => ({
+					id: s.id,
+					name: s.name,
+					registers: s.registers.map((r) => ({
+						expression: r.expression,
+						label: r.label,
+					})),
+					description: s.description,
+					isBuiltin: isBuiltinRegisterSet(s),
+				})),
+				selectedId: this.registerSetService.getSelectedId(),
+			};
+		});
+
+		// SaveRegisterSet handler
+		this.handlers.set('saveRegisterSet', async (params) => {
+			const { name, registers, description } = params as MethodMap['saveRegisterSet']['params'];
+			const set = this.registerSetService.save(name, registers, description);
+			return {
+				registerSet: {
+					id: set.id,
+					name: set.name,
+					registers: set.registers.map((r) => ({
+						expression: r.expression,
+						label: r.label,
+					})),
+					description: set.description,
+					isBuiltin: false,
+				},
+			};
+		});
+
+		// UpdateRegisterSet handler
+		this.handlers.set('updateRegisterSet', async (params) => {
+			const { id, name, registers, description } = params as MethodMap['updateRegisterSet']['params'];
+			const set = this.registerSetService.update(id, { name, registers, description });
+			return {
+				registerSet: set
+					? {
+							id: set.id,
+							name: set.name,
+							registers: set.registers.map((r) => ({
+								expression: r.expression,
+								label: r.label,
+							})),
+							description: set.description,
+							isBuiltin: isBuiltinRegisterSet(set),
+						}
+					: null,
+			};
+		});
+
+		// DeleteRegisterSet handler
+		this.handlers.set('deleteRegisterSet', async (params) => {
+			const { id } = params as MethodMap['deleteRegisterSet']['params'];
+			const success = this.registerSetService.delete(id);
+			return { success };
+		});
+
+		// SelectRegisterSet handler
+		this.handlers.set('selectRegisterSet', async (params) => {
+			const { id } = params as MethodMap['selectRegisterSet']['params'];
+			const success = this.registerSetService.select(id);
+			return { success };
+		});
+
+		// ReadRegisters handler
+		this.handlers.set('readRegisters', async (params) => {
+			const { setId } = params as MethodMap['readRegisters']['params'];
+
+			// Refresh session state
+			const state = await this.sessionTracker.refresh();
+
+			if (!state.sessionId) {
+				throw createProtocolError(
+					ProtocolErrorCode.NO_ACTIVE_SESSION,
+					'No active debug session'
+				);
+			}
+
+			if (state.status !== 'stopped') {
+				throw createProtocolError(
+					ProtocolErrorCode.SESSION_NOT_STOPPED,
+					'Debug session is not stopped. Pause execution to read registers.'
+				);
+			}
+
+			// Get the register set
+			const registerSet = this.registerSetService.get(setId);
+			if (!registerSet) {
+				throw createProtocolError(
+					ProtocolErrorCode.UNKNOWN_ERROR,
+					`Register set ${setId} not found`
+				);
+			}
+
+			// Read all registers in the set
+			const expressions = registerSet.registers.map((r) => r.expression);
+			const results = await this.debugGateway.readRegisters(state.sessionId, expressions);
+
+			// Map results with labels
+			const values = registerSet.registers.map((reg, index) => {
+				const result = results[index] ?? { expression: reg.expression, value: null };
+				return {
+					expression: reg.expression,
+					label: reg.label ?? reg.expression,
+					value: result.value,
+					error: result.error,
+				};
+			});
+
+			return { values };
 		});
 	}
 
