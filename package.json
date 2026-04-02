@@ -1,6 +1,10 @@
 {
   "name": "StackScope",
   "displayName": "StackScope",
+  "publisher": "EightLayerWorks",
+  "author": {
+    "name": "Josue Guevara"
+  },
   "description": "StackScope provides flexible memory inspection with support for multiple numeric formats (hex, decimal, octal), stack-focused views, and register tracking such as SP and PC. Designed for low-level debugging workflows, it helps developers understand how memory changes during execution.",
   "version": "0.1.0",
   "license": "MIT",
