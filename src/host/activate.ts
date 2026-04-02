@@ -14,12 +14,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	// Register commands
 	context.subscriptions.push(
-		createOpenMemoryViewCommand(
-			services.sessionTracker,
-			services.debugGateway,
-			services.documentRegistry,
-			services.memoryViewProvider
-		)
+		createOpenMemoryViewCommand(services.memoryViewProvider)
 	);
 
 	// Register session tracker for cleanup

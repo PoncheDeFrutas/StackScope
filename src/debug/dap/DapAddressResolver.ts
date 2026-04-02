@@ -5,13 +5,14 @@ import * as vscode from 'vscode';
  * Handles:
  * - Literal hex addresses (0x...) — used directly
  * - Decimal addresses — converted to hex
+ * - Register names ($pc, $sp, $lr, etc.) — evaluated via DAP
  * - Expressions (variables, &var, etc.) — evaluated via DAP
  */
 export class DapAddressResolver {
 	/**
 	 * Resolves an address expression to a memory reference string.
 	 * @param session - The debug session.
-	 * @param expression - Address expression (literal or expression).
+	 * @param expression - Address expression (literal, register, or expression).
 	 * @param frameId - Optional frame ID for expression evaluation.
 	 * @returns The memory reference string.
 	 */
@@ -36,13 +37,29 @@ export class DapAddressResolver {
 		// Get frame ID if not provided - needed for variable evaluation
 		const effectiveFrameId = frameId ?? (await this.getTopFrameId(session));
 
-		// Try different evaluation strategies
+		// If it looks like a register ($pc, $sp, $lr, etc.), try it directly first
+		if (this.isRegisterExpression(trimmed)) {
+			const registerResult = await this.tryEvaluate(session, trimmed, effectiveFrameId);
+			if (registerResult) {
+				return registerResult;
+			}
+		}
+
+		// Try different evaluation strategies for other expressions
 		return (
 			(await this.tryEvaluate(session, trimmed, effectiveFrameId)) ??
 			(await this.tryEvaluate(session, `&(${trimmed})`, effectiveFrameId)) ??
 			(await this.tryEvaluate(session, `(void*)&(${trimmed})`, effectiveFrameId)) ??
 			null
 		);
+	}
+
+	/**
+	 * Checks if the expression looks like a register reference.
+	 * Common patterns: $pc, $sp, $lr, $r0, $rax, etc.
+	 */
+	private isRegisterExpression(expression: string): boolean {
+		return /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(expression);
 	}
 
 	private async tryEvaluate(

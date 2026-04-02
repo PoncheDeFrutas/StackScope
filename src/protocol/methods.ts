@@ -48,10 +48,28 @@ export interface ReadMemoryResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// OpenDocument method
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OpenDocumentParams {
+	/**
+	 * Target to open. Can be:
+	 * - A hex address (e.g., "0x20000000")
+	 * - A register name (e.g., "$pc", "$sp", "$lr")
+	 * - A symbol/expression (e.g., "main", "&myVariable")
+	 */
+	target: string;
+}
+
+export interface OpenDocumentResult {
+	document: DocumentSnapshot;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Method names (string literal union)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MethodName = 'init' | 'readMemory';
+export type MethodName = 'init' | 'readMemory' | 'openDocument';
 
 /**
  * Maps method names to their param/result types.
@@ -59,4 +77,5 @@ export type MethodName = 'init' | 'readMemory';
 export interface MethodMap {
 	init: { params: InitParams; result: InitResult };
 	readMemory: { params: ReadMemoryParams; result: ReadMemoryResult };
+	openDocument: { params: OpenDocumentParams; result: OpenDocumentResult };
 }

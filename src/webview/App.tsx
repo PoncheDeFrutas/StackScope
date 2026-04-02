@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 import { MemoryGrid } from './components/MemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
+import { Toolbar } from './components/Toolbar.js';
 import type { SessionSnapshot, DocumentSnapshot } from '../protocol/methods.js';
 
 type AppState =
 	| { phase: 'loading' }
 	| { phase: 'no-session' }
 	| { phase: 'no-document'; session: SessionSnapshot }
+	| { phase: 'opening-document'; session: SessionSnapshot }
 	| { phase: 'loading-memory'; session: SessionSnapshot; document: DocumentSnapshot }
 	| {
 			phase: 'ready';
@@ -130,11 +132,67 @@ export function App(): JSX.Element {
 		}
 	}
 
+	const handleOpenDocument = useCallback(async (target: string) => {
+		setState((prev) => {
+			if ('session' in prev) {
+				return { phase: 'opening-document', session: prev.session };
+			}
+			return prev;
+		});
+
+		try {
+			const result = await HostClient.openDocument(target);
+			// Document changed event will trigger state transition to loading-memory
+			setState((prev) => {
+				if ('session' in prev) {
+					return {
+						phase: 'loading-memory',
+						session: prev.session,
+						document: result.document,
+					};
+				}
+				return prev;
+			});
+		} catch (err) {
+			setState((prev) => {
+				const session = 'session' in prev ? prev.session : { sessionId: null, status: 'none' as const };
+				const document = 'document' in prev ? prev.document : null;
+				return {
+					phase: 'error',
+					session,
+					document,
+					error: err instanceof Error ? err.message : 'Failed to open document',
+				};
+			});
+		}
+	}, []);
+
+	const handleRefresh = useCallback(() => {
+		if (state.phase === 'ready') {
+			setState({
+				phase: 'loading-memory',
+				session: state.session,
+				document: state.document,
+			});
+		}
+	}, [state]);
+
+	const sessionStatus = 'session' in state ? state.session.status : 'none';
+	const isLoading = state.phase === 'loading' || 
+		state.phase === 'opening-document' || 
+		state.phase === 'loading-memory';
+
 	return (
 		<div style={styles.container}>
+			<Toolbar
+				sessionStatus={sessionStatus}
+				onOpenDocument={handleOpenDocument}
+				onRefresh={handleRefresh}
+				isLoading={isLoading}
+			/>
 			<div style={styles.content}>{renderContent(state)}</div>
 			<StatusBar
-				status={'session' in state ? state.session.status : 'none'}
+				status={sessionStatus}
 				sessionId={'session' in state ? state.session.sessionId : null}
 				documentAddress={'document' in state && state.document ? state.document.address : null}
 				error={state.phase === 'error' ? state.error : null}
@@ -153,18 +211,21 @@ function renderContent(state: AppState): JSX.Element {
 				<Message>
 					No active debug session.
 					<br />
-					Start a debug session and run the "StackScope: Open Memory View" command.
+					Start debugging to use memory inspection.
 				</Message>
 			);
 
 		case 'no-document':
 			return (
 				<Message>
-					No memory document.
+					Enter an address or expression in the toolbar above,
 					<br />
-					Run the "StackScope: Open Memory View" command to create one.
+					or click PC, SP, or LR to view memory at those registers.
 				</Message>
 			);
+
+		case 'opening-document':
+			return <Message>Resolving address...</Message>;
 
 		case 'loading-memory':
 			if (state.session.status !== 'stopped') {

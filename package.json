@@ -25,7 +25,7 @@
       "commandPalette": [
         {
           "command": "stackscope.openMemoryView",
-          "when": "debugState == stopped"
+          "when": "debugState != inactive"
         }
       ]
     }

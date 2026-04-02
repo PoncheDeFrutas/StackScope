@@ -6,6 +6,8 @@ import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js
 import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
+import { createMemoryDocument } from '../../domain/documents/MemoryDocument.js';
+import { generateDocumentId } from '../../shared/ids.js';
 
 type MethodHandler<M extends MethodName> = (
 	params: MethodMap[M]['params']
@@ -137,6 +139,77 @@ export class HostMessageRouter {
 			}
 
 			return result;
+		});
+
+		// OpenDocument handler - resolves target and creates a memory document
+		this.handlers.set('openDocument', async (params) => {
+			const { target } = params as MethodMap['openDocument']['params'];
+
+			// Refresh session state to get accurate status
+			const state = await this.sessionTracker.refresh();
+
+			if (!state.sessionId) {
+				throw createProtocolError(
+					ProtocolErrorCode.NO_ACTIVE_SESSION,
+					'No active debug session'
+				);
+			}
+
+			if (state.status !== 'stopped') {
+				throw createProtocolError(
+					ProtocolErrorCode.SESSION_NOT_STOPPED,
+					'Debug session is not stopped. Pause execution first.'
+				);
+			}
+
+			// Resolve the target to a memory reference
+			const memoryReference = await this.debugGateway.evaluateForMemoryReference(
+				state.sessionId,
+				target
+			);
+
+			if (!memoryReference) {
+				// Determine appropriate error based on target type
+				const isRegister = /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(target);
+				throw createProtocolError(
+					isRegister
+						? ProtocolErrorCode.REGISTER_NOT_AVAILABLE
+						: ProtocolErrorCode.SYMBOL_NOT_FOUND,
+					`Could not resolve "${target}". ${
+						isRegister
+							? 'Register may not be available in current context.'
+							: 'Try a hex address like 0x20000000 or a valid pointer expression.'
+					}`
+				);
+			}
+
+			// Create and register document
+			const doc = createMemoryDocument(
+				generateDocumentId(),
+				target,
+				state.sessionId,
+				memoryReference
+			);
+
+			this.documentRegistry.add(doc);
+			this.documentRegistry.setActive(doc.id);
+
+			// Emit document changed event
+			this.sendEvent('documentChanged', {
+				document: {
+					id: doc.id,
+					address: doc.address,
+					sessionId: doc.sessionId,
+				},
+			});
+
+			return {
+				document: {
+					id: doc.id,
+					address: doc.address,
+					sessionId: doc.sessionId,
+				},
+			};
 		});
 	}
 

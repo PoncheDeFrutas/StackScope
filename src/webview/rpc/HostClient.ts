@@ -1,5 +1,9 @@
 import { messageBus } from './WebviewMessageBus.js';
-import type { InitResult, ReadMemoryResult } from '../../protocol/methods.js';
+import type {
+	InitResult,
+	ReadMemoryResult,
+	OpenDocumentResult,
+} from '../../protocol/methods.js';
 
 /**
  * Typed client for host RPC calls.
@@ -22,5 +26,13 @@ export const HostClient = {
 		count: number
 	): Promise<ReadMemoryResult> {
 		return messageBus.request('readMemory', { documentId, offset, count });
+	},
+
+	/**
+	 * Opens a memory document for the given target.
+	 * Target can be: hex address, register ($pc, $sp), or expression.
+	 */
+	async openDocument(target: string): Promise<OpenDocumentResult> {
+		return messageBus.request('openDocument', { target });
 	},
 };
