@@ -59,8 +59,20 @@ Workspace state keys:
 - Memory presets: `stackscope.presets`
 - Register sets: `stackscope.registerSets`
 - Selected register set: `stackscope.selectedRegisterSet`
+- View state: `stackscope.viewState`
 
 Implemented in:
 
 - `src/host/services/PresetService.ts`
 - `src/host/services/RegisterSetService.ts`
+- `src/host/services/ViewStateService.ts`
+
+Persisted view state currently includes:
+
+- Current target
+- Memory view configuration
+- Settings panel visibility
+- Register panel visibility and width
+- Register value format
+
+If the webview is restored without an active memory document, StackScope keeps the last target visible and will try to reopen it automatically once a debug session is available and `stopped`.

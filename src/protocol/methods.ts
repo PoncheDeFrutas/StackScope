@@ -1,3 +1,5 @@
+import type { MemoryViewConfig } from '../domain/config/MemoryViewConfig.js';
+
 /**
  * Session status snapshot for webview.
  */
@@ -55,6 +57,18 @@ export interface RegisterValueSnapshot {
 	error?: string;
 }
 
+/**
+ * Persisted webview UI state snapshot.
+ */
+export interface ViewStateSnapshot {
+	currentTarget: string;
+	config: MemoryViewConfig;
+	showSettings: boolean;
+	showRegisterPanel: boolean;
+	registerPanelWidth: number;
+	registerValueFormat: 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Init method
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +83,7 @@ export interface InitResult {
 	presets: PresetSnapshot[];
 	registerSets: RegisterSetSnapshot[];
 	selectedRegisterSetId: string;
+	viewState: ViewStateSnapshot | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +218,18 @@ export interface ReadRegistersResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// View state methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SaveViewStateParams {
+	viewState: ViewStateSnapshot;
+}
+
+export interface SaveViewStateResult {
+	success: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Method names (string literal union)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -218,7 +245,8 @@ export type MethodName =
 	| 'updateRegisterSet'
 	| 'deleteRegisterSet'
 	| 'selectRegisterSet'
-	| 'readRegisters';
+	| 'readRegisters'
+	| 'saveViewState';
 
 /**
  * Maps method names to their param/result types.
@@ -236,4 +264,5 @@ export interface MethodMap {
 	deleteRegisterSet: { params: DeleteRegisterSetParams; result: DeleteRegisterSetResult };
 	selectRegisterSet: { params: SelectRegisterSetParams; result: SelectRegisterSetResult };
 	readRegisters: { params: ReadRegistersParams; result: ReadRegistersResult };
+	saveViewState: { params: SaveViewStateParams; result: SaveViewStateResult };
 }

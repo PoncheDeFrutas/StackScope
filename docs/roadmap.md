@@ -10,15 +10,17 @@ It is not a guarantee of delivery order.
 - Virtualized memory grid with hex + decoded rendering
 - Memory presets persisted in workspace state
 - Register panel with custom register sets and output formatting
+- Workspace-scoped view state persistence with deferred last-target restore
 
 ## Planned enhancements
 
 ### 1) View/session persistence improvements
 
-Status: planned
+Status: implemented
 
-- Persist more UI state across reloads/reopen flows
-- Reduce setup friction after restarting sessions
+- Persist UI state across reloads/reopen flows
+- Restore the last target automatically when a stopped session is available
+- Preserve layout and register panel preferences per workspace
 
 ### 2) Byte-change highlighting improvements
 

@@ -6,6 +6,7 @@ import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 import { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
 import { PresetService } from '../services/PresetService.js';
 import { RegisterSetService } from '../services/RegisterSetService.js';
+import { ViewStateService } from '../services/ViewStateService.js';
 
 /**
  * Container for all host-level services.
@@ -16,6 +17,7 @@ export interface HostServices {
 	documentRegistry: DocumentRegistry;
 	presetService: PresetService;
 	registerSetService: RegisterSetService;
+	viewStateService: ViewStateService;
 	messageRouter: HostMessageRouter;
 	memoryViewProvider: MemoryViewProvider;
 }
@@ -33,12 +35,14 @@ export function createHostServices(
 	const documentRegistry = new DocumentRegistry();
 	const presetService = new PresetService(context);
 	const registerSetService = new RegisterSetService(context);
+	const viewStateService = new ViewStateService(context);
 	const messageRouter = new HostMessageRouter(
 		sessionTracker,
 		debugGateway,
 		documentRegistry,
 		presetService,
-		registerSetService
+		registerSetService,
+		viewStateService
 	);
 	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
 
@@ -48,6 +52,7 @@ export function createHostServices(
 		documentRegistry,
 		presetService,
 		registerSetService,
+		viewStateService,
 		messageRouter,
 		memoryViewProvider,
 	};

@@ -13,6 +13,8 @@ import type {
 	SelectRegisterSetResult,
 	ReadRegistersResult,
 	RegisterItemSnapshot,
+	ViewStateSnapshot,
+	SaveViewStateResult,
 } from '../../protocol/methods.js';
 
 /**
@@ -126,5 +128,12 @@ export const HostClient = {
 	 */
 	async readRegisters(setId: string): Promise<ReadRegistersResult> {
 		return messageBus.request('readRegisters', { setId });
+	},
+
+	/**
+	 * Persists current webview UI state.
+	 */
+	async saveViewState(viewState: ViewStateSnapshot): Promise<SaveViewStateResult> {
+		return messageBus.request('saveViewState', { viewState });
 	},
 };

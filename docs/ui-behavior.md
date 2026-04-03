@@ -33,6 +33,19 @@ This page describes current UI behavior from `src/webview/*`.
 - On transition to `stopped`, pending refresh flags trigger:
   - memory page refresh (`refreshAll`)
   - register refresh (`readRegisters`)
+- If no document is active but a persisted target exists, the webview keeps that target and attempts a deferred reopen once a session is `stopped`.
+
+## View persistence behavior
+
+- Webview UI state is restored from workspace state during `init`.
+- Persisted fields include:
+  - current target
+  - `MemoryViewConfig`
+  - settings panel visibility
+  - register panel visibility
+  - register panel width
+  - register value format
+- Register set selection is persisted separately by host-side register set storage.
 
 ## Toolbar behavior (`src/webview/components/Toolbar.tsx`)
 

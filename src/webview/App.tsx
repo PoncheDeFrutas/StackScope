@@ -31,6 +31,7 @@ const DEFAULT_REGISTER_PANEL_WIDTH = 320;
 const MIN_REGISTER_PANEL_WIDTH = 240;
 const MIN_REGISTER_PANEL_WIDTH_FALLBACK = 180;
 const MAX_REGISTER_PANEL_RATIO = 0.45;
+const VIEW_STATE_SAVE_DEBOUNCE_MS = 200;
 
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
@@ -51,7 +52,11 @@ export function App(): JSX.Element {
 	const [registerPanelWidth, setRegisterPanelWidth] = useState(DEFAULT_REGISTER_PANEL_WIDTH);
 	const [isResizingRegisterPanel, setIsResizingRegisterPanel] = useState(false);
 	const [editingRegisterSet, setEditingRegisterSet] = useState<RegisterSetSnapshot | null | 'new'>(null);
+	const [viewStateReady, setViewStateReady] = useState(false);
 	const splitContainerRef = useRef<HTMLDivElement>(null);
+	const configRef = useRef(config);
+	const pendingRestoreTargetRef = useRef<string | null>(null);
+	const restoreAttemptSessionIdRef = useRef<string | null>(null);
 
 	// Paged memory state
 	const pagedMemory = usePagedMemory();
@@ -65,10 +70,15 @@ export function App(): JSX.Element {
 	const pendingRegisterRefreshRef = useRef(false);
 
 	useEffect(() => {
+		configRef.current = config;
+	}, [config]);
+
+	useEffect(() => {
 		// Subscribe to session changes
 		const unsubSession = messageBus.on('sessionChanged', (payload) => {
 			setState((prev) => {
 				if (payload.session.status === 'none' || !payload.session.sessionId) {
+					restoreAttemptSessionIdRef.current = null;
 					return { phase: 'no-session' };
 				}
 
@@ -130,8 +140,9 @@ export function App(): JSX.Element {
 					pagedMemory.reset(
 						payload.document.id,
 						payload.document.address,
-						config.totalSize
+						configRef.current.totalSize
 					);
+					setCurrentTarget(payload.document.address);
 					return {
 						phase: 'ready',
 						session: prev.session,
@@ -168,6 +179,35 @@ export function App(): JSX.Element {
 		return () => observer.disconnect();
 	}, []);
 
+	useEffect(() => {
+		if (!viewStateReady) {
+			return;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			void HostClient.saveViewState({
+				currentTarget,
+				config,
+				showSettings,
+				showRegisterPanel,
+				registerPanelWidth,
+				registerValueFormat,
+			}).catch((err) => {
+				console.error('Failed to save view state:', err);
+			});
+		}, VIEW_STATE_SAVE_DEBOUNCE_MS);
+
+		return () => window.clearTimeout(timeoutId);
+	}, [
+		viewStateReady,
+		currentTarget,
+		config,
+		showSettings,
+		showRegisterPanel,
+		registerPanelWidth,
+		registerValueFormat,
+	]);
+
 	// Handle pending refresh when stopped
 	useEffect(() => {
 		if (pendingRefreshRef.current && state.phase === 'ready' && state.session.status === 'stopped') {
@@ -188,6 +228,9 @@ export function App(): JSX.Element {
 	async function init(): Promise<void> {
 		try {
 			const result = await HostClient.init();
+			const restoredViewState = result.viewState;
+			const restoredConfig = restoredViewState?.config ?? DEFAULT_CONFIG;
+			const restoredTarget = result.activeDocument?.address ?? restoredViewState?.currentTarget ?? '';
 
 			// Store presets from init
 			setPresets(result.presets);
@@ -195,6 +238,17 @@ export function App(): JSX.Element {
 			// Store register sets from init
 			setRegisterSets(result.registerSets);
 			setSelectedRegisterSetId(result.selectedRegisterSetId);
+			setConfig(restoredConfig);
+			setShowSettings(restoredViewState?.showSettings ?? false);
+			setShowRegisterPanel(restoredViewState?.showRegisterPanel ?? true);
+			setRegisterPanelWidth(restoredViewState?.registerPanelWidth ?? DEFAULT_REGISTER_PANEL_WIDTH);
+			setRegisterValueFormat(restoredViewState?.registerValueFormat ?? 'hex');
+			setCurrentTarget(restoredTarget);
+
+			if (restoredTarget) {
+				pendingRestoreTargetRef.current = restoredTarget;
+			}
+			setViewStateReady(true);
 
 			if (!result.session.sessionId) {
 				setState({ phase: 'no-session' });
@@ -210,13 +264,13 @@ export function App(): JSX.Element {
 				return;
 			}
 
-			setCurrentTarget(result.activeDocument.address);
+			pendingRestoreTargetRef.current = null;
 
 			// Initialize paged memory
 			pagedMemory.reset(
 				result.activeDocument.id,
 				result.activeDocument.address,
-				config.totalSize
+				restoredConfig.totalSize
 			);
 
 			setState({
@@ -280,9 +334,16 @@ export function App(): JSX.Element {
 		loadRegisters(selectedRegisterSetId);
 	}
 
-	const handleOpenDocument = useCallback(async (target: string) => {
+	const handleOpenDocument = useCallback(async (
+		target: string,
+		options?: { preservePendingRestore?: boolean }
+	): Promise<boolean> => {
 		setCurrentTarget(target);
 		setSelectedPresetId(null);
+		if (!options?.preservePendingRestore) {
+			pendingRestoreTargetRef.current = null;
+			restoreAttemptSessionIdRef.current = null;
+		}
 		setState((prev) => {
 			if ('session' in prev) {
 				return { phase: 'opening-document', session: prev.session };
@@ -310,6 +371,7 @@ export function App(): JSX.Element {
 				}
 				return prev;
 			});
+			return true;
 		} catch (err) {
 			setState((prev) => {
 				const session = 'session' in prev ? prev.session : { sessionId: null, status: 'none' as const };
@@ -321,8 +383,35 @@ export function App(): JSX.Element {
 					error: err instanceof Error ? err.message : 'Failed to open document',
 				};
 			});
+			return false;
 		}
 	}, [config.totalSize, pagedMemory]);
+
+	useEffect(() => {
+		const sessionId = 'session' in state ? state.session.sessionId : null;
+		const sessionStatus = 'session' in state ? state.session.status : 'none';
+		const target = pendingRestoreTargetRef.current;
+
+		if (
+			!viewStateReady ||
+			!target ||
+			!sessionId ||
+			sessionStatus !== 'stopped' ||
+			state.phase === 'ready' ||
+			restoreAttemptSessionIdRef.current === sessionId
+		) {
+			return;
+		}
+
+		restoreAttemptSessionIdRef.current = sessionId;
+
+		void handleOpenDocument(target, { preservePendingRestore: true }).then((success) => {
+			if (success) {
+				pendingRestoreTargetRef.current = null;
+				restoreAttemptSessionIdRef.current = null;
+			}
+		});
+	}, [state, handleOpenDocument, viewStateReady]);
 
 	const handleSelectPreset = useCallback((preset: PresetSnapshot | null) => {
 		if (preset) {

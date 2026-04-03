@@ -8,6 +8,7 @@ import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import type { PresetService } from '../services/PresetService.js';
 import type { RegisterSetService } from '../services/RegisterSetService.js';
+import type { ViewStateService } from '../services/ViewStateService.js';
 import {
 	createMemoryDocument,
 	isLiteralAddress,
@@ -35,7 +36,8 @@ export class HostMessageRouter {
 		private readonly debugGateway: DebugGateway,
 		private readonly documentRegistry: DocumentRegistry,
 		private readonly presetService: PresetService,
-		private readonly registerSetService: RegisterSetService
+		private readonly registerSetService: RegisterSetService,
+		private readonly viewStateService: ViewStateService
 	) {
 		this.registerHandlers();
 	}
@@ -90,6 +92,7 @@ export class HostMessageRouter {
 			const activeDoc = this.documentRegistry.getActive();
 			const presets = this.presetService.getAll();
 			const registerSets = this.registerSetService.getAll();
+			const viewState = this.viewStateService.get();
 
 			return {
 				session: {
@@ -121,6 +124,7 @@ export class HostMessageRouter {
 					isBuiltin: isBuiltinRegisterSet(s),
 				})),
 				selectedRegisterSetId: this.registerSetService.getSelectedId(),
+				viewState,
 			};
 		});
 
@@ -430,6 +434,13 @@ export class HostMessageRouter {
 			});
 
 			return { values };
+		});
+
+		// SaveViewState handler
+		this.handlers.set('saveViewState', async (params) => {
+			const { viewState } = params as MethodMap['saveViewState']['params'];
+			await this.viewStateService.save(viewState);
+			return { success: true };
 		});
 	}
 

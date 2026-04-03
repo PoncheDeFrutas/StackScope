@@ -1,4 +1,4 @@
-import { useState, useCallback, type FormEvent, type KeyboardEvent, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, type FormEvent, type KeyboardEvent, type CSSProperties } from 'react';
 import type { PresetSnapshot } from '../../protocol/methods.js';
 
 interface ToolbarProps {
@@ -36,6 +36,10 @@ export function Toolbar({
 	const [target, setTarget] = useState('');
 	const [showSaveDialog, setShowSaveDialog] = useState(false);
 	const [presetName, setPresetName] = useState('');
+
+	useEffect(() => {
+		setTarget(currentTarget);
+	}, [currentTarget]);
 
 	const isDisabled = sessionStatus !== 'stopped' || isLoading;
 	const canRefresh = sessionStatus === 'stopped' && !isLoading;
