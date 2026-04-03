@@ -8,6 +8,12 @@ import { SettingsPanel } from './components/SettingsPanel.js';
 import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
 import { usePagedMemory } from './hooks/usePagedMemory.js';
+import {
+	captureBaselineFromPages,
+	diffPagesAgainstBaseline,
+	getChangedByteCount,
+	type ByteChangeMap,
+} from './changeTracking.js';
 import type {
 	SessionSnapshot,
 	DocumentSnapshot,
@@ -62,7 +68,7 @@ export function App(): JSX.Element {
 	const pagedMemory = usePagedMemory();
 
 	// Track previous data for change highlighting
-	const [changedBytes, setChangedBytes] = useState<Set<number>>(new Set());
+	const [changedBytes, setChangedBytes] = useState<ByteChangeMap>(new Map());
 	const baselineRef = useRef<Map<number, number | null>>(new Map());
 
 	// Track if we need to refresh on next stopped event
@@ -79,6 +85,8 @@ export function App(): JSX.Element {
 			setState((prev) => {
 				if (payload.session.status === 'none' || !payload.session.sessionId) {
 					restoreAttemptSessionIdRef.current = null;
+					baselineRef.current = new Map();
+					setChangedBytes(new Map());
 					return { phase: 'no-session' };
 				}
 
@@ -105,15 +113,8 @@ export function App(): JSX.Element {
 
 				// When transitioning to running, save baseline for change detection
 				if (payload.session.status === 'running' && prev.phase === 'ready') {
-					// Save current data as baseline
-					const baseline = new Map<number, number | null>();
-					for (const [offset, page] of pagedMemory.state.pages) {
-						page.data.forEach((byte, i) => {
-							baseline.set(offset + i, byte);
-						});
-					}
-					baselineRef.current = baseline;
-					setChangedBytes(new Set());
+					baselineRef.current = captureBaselineFromPages(pagedMemory.state.pages);
+					setChangedBytes(new Map());
 					// Mark registers as stale when running
 					setRegistersStale(true);
 				}
@@ -130,6 +131,8 @@ export function App(): JSX.Element {
 		const unsubDoc = messageBus.on('documentChanged', (payload) => {
 			setState((prev) => {
 				if (!payload.document) {
+					baselineRef.current = new Map();
+					setChangedBytes(new Map());
 					if ('session' in prev) {
 						return { phase: 'no-document', session: prev.session };
 					}
@@ -142,6 +145,8 @@ export function App(): JSX.Element {
 						payload.document.address,
 						configRef.current.totalSize
 					);
+					baselineRef.current = new Map();
+					setChangedBytes(new Map());
 					setCurrentTarget(payload.document.address);
 					return {
 						phase: 'ready',
@@ -314,21 +319,13 @@ export function App(): JSX.Element {
 
 		await pagedMemory.refreshAll();
 
-		// Compare with baseline for change detection
-		const changed = new Set<number>();
-		const baseline = baselineRef.current;
-
-		for (const [offset, page] of pagedMemory.state.pages) {
-			page.data.forEach((byte, i) => {
-				const globalOffset = offset + i;
-				const baselineByte = baseline.get(globalOffset);
-				if (baselineByte !== undefined && baselineByte !== byte) {
-					changed.add(globalOffset);
-				}
-			});
-		}
-
-		setChangedBytes(changed);
+		setChangedBytes(
+			diffPagesAgainstBaseline(
+				pagedMemory.state.pages,
+				baselineRef.current,
+				Date.now()
+			)
+		);
 
 		// Also refresh registers
 		loadRegisters(selectedRegisterSetId);
@@ -359,7 +356,7 @@ export function App(): JSX.Element {
 
 			// Clear change tracking
 			baselineRef.current = new Map();
-			setChangedBytes(new Set());
+			setChangedBytes(new Map());
 
 			setState((prev) => {
 				if ('session' in prev) {
@@ -618,6 +615,7 @@ export function App(): JSX.Element {
 
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
+	const changedByteCount = getChangedByteCount(changedBytes);
 
 	return (
 		<div style={styles.container}>
@@ -714,6 +712,7 @@ export function App(): JSX.Element {
 				sessionId={'session' in state ? state.session.sessionId : null}
 				documentAddress={'document' in state && state.document ? state.document.address : null}
 				error={state.phase === 'error' ? state.error : null}
+				changedByteCount={changedByteCount}
 			/>
 			{/* Register set editor modal */}
 			{editingRegisterSet !== null && (
@@ -732,7 +731,7 @@ function renderContent(
 	config: MemoryViewConfig,
 	pagedMemory: ReturnType<typeof usePagedMemory>,
 	onVisibleRangeChange: (start: number, end: number) => void,
-	changedBytes: Set<number>
+	changedBytes: ByteChangeMap
 ): JSX.Element {
 	switch (state.phase) {
 		case 'loading':

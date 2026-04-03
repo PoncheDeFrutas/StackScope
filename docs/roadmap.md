@@ -24,10 +24,11 @@ Status: implemented
 
 ### 2) Byte-change highlighting improvements
 
-Status: planned
+Status: implemented
 
-- Refine changed-byte tracking across run/stop cycles
-- Improve presentation and clarity of change states
+- Refined changed-byte tracking across run/stop cycles
+- Only highlight bytes with a known baseline before execution resumed
+- Added temporary fade presentation and changed-byte summary in the status bar
 
 ### 3) Call stack integration
 

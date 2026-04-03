@@ -3,6 +3,7 @@ interface StatusBarProps {
 	sessionId: string | null;
 	documentAddress: string | null;
 	error: string | null;
+	changedByteCount?: number;
 }
 
 /**
@@ -13,6 +14,7 @@ export function StatusBar({
 	sessionId,
 	documentAddress,
 	error,
+	changedByteCount = 0,
 }: StatusBarProps): JSX.Element {
 	return (
 		<div style={styles.container}>
@@ -23,6 +25,11 @@ export function StatusBar({
 				)}
 				{documentAddress && (
 					<span style={styles.address}>Address: {documentAddress}</span>
+				)}
+				{documentAddress && changedByteCount > 0 && (
+					<span style={styles.changedSummary}>
+						Changed: {changedByteCount} {changedByteCount === 1 ? 'byte' : 'bytes'}
+					</span>
 				)}
 			</div>
 			{error && <div style={styles.error}>{error}</div>}
@@ -90,6 +97,9 @@ const styles: Record<string, React.CSSProperties> = {
 	},
 	address: {
 		color: 'var(--vscode-debugTokenExpression-number)',
+	},
+	changedSummary: {
+		color: 'var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)',
 	},
 	error: {
 		color: 'var(--vscode-errorForeground)',

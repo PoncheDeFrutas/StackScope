@@ -100,6 +100,7 @@ This enforces one-to-one width parity between hex and decoded sections.
   - decoded shows `~~` padded
 - Changed bytes:
   - variant style `changed` applies highlighted background and color
+  - changed cells animate through a fade in opacity, but remain visibly marked during the current inspection cycle
 
 ## Styling primitives
 

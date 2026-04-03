@@ -1,6 +1,12 @@
 import { useRef, useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
 import { calculateVisibleRange } from '../hooks/usePagedMemory.js';
+import {
+	CHANGE_HIGHLIGHT_FADE_MS,
+	getChangedCellOpacity,
+	hasAnimatingChanges,
+	type ByteChangeMap,
+} from '../changeTracking.js';
 
 /** Represents a byte value or null for unreadable memory */
 export type MemoryByte = number | null;
@@ -31,7 +37,7 @@ interface VirtualMemoryGridProps {
 	/** Decoded column mode (only shown when unitSize=1) */
 	decodedMode?: DecodedMode;
 	/** Set of changed byte offsets (for highlighting) */
-	changedBytes?: Set<number>;
+	changedBytes?: ByteChangeMap;
 	/** Previous data for comparison (baseline) */
 	previousData?: Map<number, number | null>;
 }
@@ -109,6 +115,7 @@ export function VirtualMemoryGrid({
 	const [scrollTop, setScrollTop] = useState(0);
 	const [viewportHeight, setViewportHeight] = useState(400);
 	const [revealedSize, setRevealedSize] = useState(0);
+	const [fadeNow, setFadeNow] = useState(() => Date.now());
 
 	const bytesPerRow = columns * unitSize;
 	const initialWindowBytes = bytesPerRow * INITIAL_WINDOW_ROWS;
@@ -172,6 +179,24 @@ export function VirtualMemoryGrid({
 		return () => observer.disconnect();
 	}, []);
 
+	useEffect(() => {
+		if (!changedBytes || changedBytes.size === 0) {
+			return;
+		}
+
+		setFadeNow(Date.now());
+
+		const intervalId = window.setInterval(() => {
+			const now = Date.now();
+			setFadeNow(now);
+			if (!hasAnimatingChanges(changedBytes, now, CHANGE_HIGHLIGHT_FADE_MS)) {
+				window.clearInterval(intervalId);
+			}
+		}, 120);
+
+		return () => window.clearInterval(intervalId);
+	}, [changedBytes]);
+
 	const baseAddr = parseAddress(baseAddress);
 	const showDecoded = unitSize === 1 && decodedMode !== 'hidden';
 	const midPoint = Math.floor(columns / 2);
@@ -198,6 +223,7 @@ export function VirtualMemoryGrid({
 				decodedCellWidthCh={decodedCellWidthCh}
 				midPoint={midPoint}
 				changedBytes={changedBytes}
+				fadeNow={fadeNow}
 			/>
 		);
 	}
@@ -315,7 +341,8 @@ interface MemoryRowProps {
 	cellWidthCh: number;
 	decodedCellWidthCh: number;
 	midPoint: number;
-	changedBytes?: Set<number>;
+	changedBytes?: ByteChangeMap;
+	fadeNow: number;
 }
 
 function MemoryRow({
@@ -332,6 +359,7 @@ function MemoryRow({
 	decodedCellWidthCh,
 	midPoint,
 	changedBytes,
+	fadeNow,
 }: MemoryRowProps): JSX.Element {
 	const hexCells: JSX.Element[] = [];
 	const decodedCells: JSX.Element[] = [];
@@ -350,9 +378,19 @@ function MemoryRow({
 		const unitBytes = bytes ? bytes.slice(startIdx, startIdx + unitSize) : null;
 		const isLoading = bytes === null;
 		const isUnreadable = unitBytes?.some((b) => b === null) ?? false;
-		const unitChanged = changedBytes && unitBytes?.some((_, i) =>
-			changedBytes.has(rowOffset + startIdx + i)
-		);
+		let unitChangedAt: number | null = null;
+		if (changedBytes && unitBytes) {
+			for (let i = 0; i < unitBytes.length; i++) {
+				const changedAt = changedBytes.get(rowOffset + startIdx + i);
+				if (changedAt !== undefined && (unitChangedAt === null || changedAt > unitChangedAt)) {
+					unitChangedAt = changedAt;
+				}
+			}
+		}
+		const unitChanged = unitChangedAt !== null;
+		const changedOpacity = unitChangedAt === null
+			? undefined
+			: getChangedCellOpacity(unitChangedAt, fadeNow, CHANGE_HIGHLIGHT_FADE_MS);
 
 		// Format hex content
 		let hexContent: string;
@@ -367,7 +405,7 @@ function MemoryRow({
 		const hexVariant = isLoading ? 'loading' : isUnreadable ? 'unreadable' : unitChanged ? 'changed' : 'hex';
 
 		hexCells.push(
-			<ByteCell key={`hex-${col}`} widthCh={cellWidthCh} variant={hexVariant}>
+			<ByteCell key={`hex-${col}`} widthCh={cellWidthCh} variant={hexVariant} changedOpacity={changedOpacity}>
 				{hexContent}
 			</ByteCell>
 		);
@@ -388,7 +426,7 @@ function MemoryRow({
 			const decodedVariant = isLoading ? 'loading' : byte === null ? 'unreadable' : unitChanged ? 'changed' : 'decoded';
 
 			decodedCells.push(
-				<ByteCell key={`dec-${col}`} widthCh={decodedCellWidthCh} variant={decodedVariant}>
+				<ByteCell key={`dec-${col}`} widthCh={decodedCellWidthCh} variant={decodedVariant} changedOpacity={changedOpacity}>
 					{decodedContent}
 				</ByteCell>
 			);
@@ -420,20 +458,25 @@ interface ByteCellProps {
 	widthCh: number;
 	variant: CellVariant;
 	children: string;
+	changedOpacity?: number;
 }
 
 /**
  * A single byte cell - used for both hex and decoded values.
  * Same font, same sizing, same structure for perfect alignment.
  */
-function ByteCell({ widthCh, variant, children }: ByteCellProps): JSX.Element {
+function ByteCell({ widthCh, variant, children, changedOpacity }: ByteCellProps): JSX.Element {
 	const variantStyle = variantStyles[variant] || {};
+	const changedStyle = variant === 'changed' && changedOpacity !== undefined
+		? { opacity: changedOpacity }
+		: {};
 	return (
 		<span
 			style={{
 				...styles.byteCell,
 				width: `${widthCh}ch`,
 				...variantStyle,
+				...changedStyle,
 			}}
 		>
 			{children}
@@ -626,6 +669,7 @@ const styles: Record<string, CSSProperties> = {
 		whiteSpace: 'pre',
 		flexShrink: 0,
 		overflow: 'hidden',
+		transition: 'opacity 120ms linear',
 	},
 };
 
@@ -653,5 +697,6 @@ const variantStyles: Record<CellVariant, CSSProperties> = {
 	changed: {
 		backgroundColor: 'var(--vscode-diffEditor-insertedTextBackground, rgba(155, 185, 85, 0.2))',
 		color: 'var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)',
+		borderRadius: '2px',
 	},
 };

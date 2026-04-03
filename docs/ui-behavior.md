@@ -34,6 +34,8 @@ This page describes current UI behavior from `src/webview/*`.
   - memory page refresh (`refreshAll`)
   - register refresh (`readRegisters`)
 - If no document is active but a persisted target exists, the webview keeps that target and attempts a deferred reopen once a session is `stopped`.
+- Changed-byte highlighting only applies to offsets that had a known baseline before the previous `run`.
+- Changed-byte state is cleared when a new run starts or a different target/document is opened.
 
 ## View persistence behavior
 
@@ -82,6 +84,7 @@ This page describes current UI behavior from `src/webview/*`.
 
 - Shows status dot and label (`No Session`, `Running`, `Stopped`).
 - Shows session id prefix and current document address when available.
+- Shows changed-byte count when the current document has verified diffs.
 - Shows error text if current app state is `error`.
 
 ## Address / hex / decoded in current UI
@@ -92,3 +95,4 @@ Detailed rendering is in `docs/rendering.md`, but at UI level:
 - Hex section renders unit-based values per configured format.
 - Decoded section renders only for `unitSize === 1` and non-hidden mode.
 - Loading/unreadable states are represented inline by placeholder glyphs.
+- Changed bytes highlight in both hex and decoded cells, then visually fade while remaining marked for the current inspection cycle.
