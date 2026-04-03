@@ -27,7 +27,7 @@ Recommended structure in this repo:
 ### Fixed
 - ...
 
-## [0.1.0] - 2026-04-02
+## [0.1.1] - 2026-04-02
 
 ### Added
 - ...
@@ -49,7 +49,7 @@ pnpm run compile
 
 ## Versioning approach used so far
 
-Current version in `package.json` is `0.1.0`.
+Current version in `package.json` is `0.1.1`.
 
 Practical progression:
 
