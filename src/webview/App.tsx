@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 import { VirtualMemoryGrid } from './components/VirtualMemoryGrid.js';
@@ -27,6 +27,11 @@ type AppState =
 	| { phase: 'ready'; session: SessionSnapshot; document: DocumentSnapshot }
 	| { phase: 'error'; session: SessionSnapshot; document: DocumentSnapshot | null; error: string };
 
+const DEFAULT_REGISTER_PANEL_WIDTH = 320;
+const MIN_REGISTER_PANEL_WIDTH = 240;
+const MIN_REGISTER_PANEL_WIDTH_FALLBACK = 180;
+const MAX_REGISTER_PANEL_RATIO = 0.45;
+
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
 	const [config, setConfig] = useState<MemoryViewConfig>(DEFAULT_CONFIG);
@@ -43,7 +48,10 @@ export function App(): JSX.Element {
 	const [registersLoading, setRegistersLoading] = useState(false);
 	const [registerValueFormat, setRegisterValueFormat] = useState<RegisterValueFormat>('hex');
 	const [showRegisterPanel, setShowRegisterPanel] = useState(true);
+	const [registerPanelWidth, setRegisterPanelWidth] = useState(DEFAULT_REGISTER_PANEL_WIDTH);
+	const [isResizingRegisterPanel, setIsResizingRegisterPanel] = useState(false);
 	const [editingRegisterSet, setEditingRegisterSet] = useState<RegisterSetSnapshot | null | 'new'>(null);
+	const splitContainerRef = useRef<HTMLDivElement>(null);
 
 	// Paged memory state
 	const pagedMemory = usePagedMemory();
@@ -141,6 +149,23 @@ export function App(): JSX.Element {
 			unsubSession();
 			unsubDoc();
 		};
+	}, []);
+
+	useEffect(() => {
+		const container = splitContainerRef.current;
+		if (!container) {
+			return;
+		}
+
+		const clampWidth = () => {
+			setRegisterPanelWidth((prev) => clampRegisterPanelWidth(prev, container.clientWidth));
+		};
+
+		clampWidth();
+
+		const observer = new ResizeObserver(clampWidth);
+		observer.observe(container);
+		return () => observer.disconnect();
 	}, []);
 
 	// Handle pending refresh when stopped
@@ -475,6 +500,33 @@ export function App(): JSX.Element {
 		setRegisterValueFormat(format);
 	}, []);
 
+	const handleRegisterResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+		const container = splitContainerRef.current;
+		if (!container) {
+			return;
+		}
+
+		event.preventDefault();
+		setIsResizingRegisterPanel(true);
+
+		const handlePointerMove = (moveEvent: PointerEvent) => {
+			const rect = container.getBoundingClientRect();
+			const nextWidth = rect.right - moveEvent.clientX;
+			setRegisterPanelWidth(clampRegisterPanelWidth(nextWidth, rect.width));
+		};
+
+		const handlePointerEnd = () => {
+			setIsResizingRegisterPanel(false);
+			window.removeEventListener('pointermove', handlePointerMove);
+			window.removeEventListener('pointerup', handlePointerEnd);
+			window.removeEventListener('pointercancel', handlePointerEnd);
+		};
+
+		window.addEventListener('pointermove', handlePointerMove);
+		window.addEventListener('pointerup', handlePointerEnd);
+		window.addEventListener('pointercancel', handlePointerEnd);
+	}, []);
+
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 
@@ -503,52 +555,70 @@ export function App(): JSX.Element {
 					disabled={sessionStatus !== 'stopped'}
 				/>
 			)}
-			<div style={styles.mainContent}>
-				{/* Register Panel (collapsible) */}
-				<div style={{
-					...styles.registerPanelContainer,
-					display: showRegisterPanel ? 'flex' : 'none',
-				}}>
-					<div style={styles.registerPanelHeader}>
-						<span style={styles.registerPanelTitle}>Registers</span>
-						<button
-							onClick={handleToggleRegisterPanel}
-							style={styles.collapseButton}
-							title="Hide registers"
-						>
-							<ChevronDownIcon />
-						</button>
-					</div>
-					<RegisterPanel
-						registerSets={registerSets}
-						selectedSetId={selectedRegisterSetId}
-						registerValues={registerValues}
-						isStale={registersStale}
-						isLoading={registersLoading}
-						sessionStatus={sessionStatus}
-						valueFormat={registerValueFormat}
-						onSelectSet={handleSelectRegisterSet}
-						onValueFormatChange={handleRegisterValueFormatChange}
-						onRefresh={handleRefreshRegisters}
-						onEditSet={handleEditRegisterSet}
-						onCreateSet={handleCreateRegisterSet}
-						onDeleteSet={handleDeleteRegisterSet}
-					/>
-				</div>
-				{/* Collapsed register toggle */}
-				{!showRegisterPanel && (
-					<button
-						onClick={handleToggleRegisterPanel}
-						style={styles.expandButton}
-						title="Show registers"
-					>
-						<ChevronRightIcon /> Registers
-					</button>
-				)}
+			<div
+				ref={splitContainerRef}
+				style={{
+					...styles.mainContent,
+					cursor: isResizingRegisterPanel ? 'col-resize' : 'default',
+					userSelect: isResizingRegisterPanel ? 'none' : 'auto',
+				}}
+			>
 				{/* Memory content */}
 				<div style={styles.content}>
 					{renderContent(state, config, pagedMemory, handleVisibleRangeChange, changedBytes)}
 				</div>
+				{showRegisterPanel ? (
+					<>
+						<div
+							style={styles.registerResizeHandle}
+							onPointerDown={handleRegisterResizeStart}
+							role="separator"
+							aria-orientation="vertical"
+							aria-label="Resize register panel"
+						/>
+						<div
+							style={{
+								...styles.registerPanelContainer,
+								width: registerPanelWidth,
+							}}
+						>
+							<div style={styles.registerPanelHeader}>
+								<span style={styles.registerPanelTitle}>Registers</span>
+								<button
+									onClick={handleToggleRegisterPanel}
+									style={styles.collapseButton}
+									title="Hide registers"
+								>
+									<ChevronRightIcon />
+								</button>
+							</div>
+							<RegisterPanel
+								registerSets={registerSets}
+								selectedSetId={selectedRegisterSetId}
+								registerValues={registerValues}
+								isStale={registersStale}
+								isLoading={registersLoading}
+								sessionStatus={sessionStatus}
+								valueFormat={registerValueFormat}
+								onSelectSet={handleSelectRegisterSet}
+								onValueFormatChange={handleRegisterValueFormatChange}
+								onRefresh={handleRefreshRegisters}
+								onEditSet={handleEditRegisterSet}
+								onCreateSet={handleCreateRegisterSet}
+								onDeleteSet={handleDeleteRegisterSet}
+							/>
+						</div>
+					</>
+				) : (
+					<button
+						onClick={handleToggleRegisterPanel}
+						style={styles.expandSideTab}
+						title="Show registers"
+					>
+						<ChevronLeftIcon />
+						<span style={styles.expandSideTabLabel}>Registers</span>
+					</button>
+				)}
 			</div>
 			<StatusBar
 				status={sessionStatus}
@@ -650,10 +720,10 @@ function Message({ children, error }: MessageProps): JSX.Element {
 	);
 }
 
-function ChevronDownIcon(): JSX.Element {
+function ChevronLeftIcon(): JSX.Element {
 	return (
 		<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-			<path d="M8 11.5L3.5 7l.7-.7L8 10.1l3.8-3.8.7.7L8 11.5z" />
+			<path d="M9.5 13L5 8.5l4.5-4.5.7.7L6.4 8.5l3.8 3.8-.7.7z" />
 		</svg>
 	);
 }
@@ -675,14 +745,17 @@ const styles: Record<string, React.CSSProperties> = {
 	mainContent: {
 		flex: 1,
 		display: 'flex',
-		flexDirection: 'column',
+		flexDirection: 'row',
 		overflow: 'hidden',
+		minHeight: 0,
 	},
 	registerPanelContainer: {
+		display: 'flex',
 		flexDirection: 'column',
-		borderBottom: '1px solid var(--vscode-widget-border)',
-		maxHeight: '200px',
-		minHeight: '100px',
+		minWidth: 0,
+		minHeight: 0,
+		borderLeft: '1px solid var(--vscode-widget-border)',
+		backgroundColor: 'var(--vscode-editor-background)',
 	},
 	registerPanelHeader: {
 		display: 'flex',
@@ -691,6 +764,13 @@ const styles: Record<string, React.CSSProperties> = {
 		padding: '4px 8px',
 		backgroundColor: 'var(--vscode-sideBarSectionHeader-background)',
 		borderBottom: '1px solid var(--vscode-widget-border)',
+	},
+	registerResizeHandle: {
+		width: '6px',
+		cursor: 'col-resize',
+		backgroundColor: 'transparent',
+		borderLeft: '1px solid transparent',
+		borderRight: '1px solid transparent',
 	},
 	registerPanelTitle: {
 		fontSize: '11px',
@@ -710,23 +790,31 @@ const styles: Record<string, React.CSSProperties> = {
 		color: 'var(--vscode-foreground)',
 		cursor: 'pointer',
 	},
-	expandButton: {
+	expandSideTab: {
 		display: 'flex',
 		alignItems: 'center',
+		justifyContent: 'center',
 		gap: '4px',
-		padding: '4px 8px',
+		width: '30px',
+		padding: '8px 4px',
 		border: 'none',
+		borderLeft: '1px solid var(--vscode-widget-border)',
 		backgroundColor: 'var(--vscode-sideBarSectionHeader-background)',
 		color: 'var(--vscode-sideBarSectionHeader-foreground)',
 		cursor: 'pointer',
 		fontSize: '11px',
 		fontWeight: 600,
 		textTransform: 'uppercase' as const,
-		borderBottom: '1px solid var(--vscode-widget-border)',
+		writingMode: 'vertical-rl',
+		textOrientation: 'mixed',
+	},
+	expandSideTabLabel: {
+		letterSpacing: '0.08em',
 	},
 	content: {
 		flex: 1,
 		overflow: 'hidden',
+		minWidth: 0,
 	},
 	message: {
 		display: 'flex',
@@ -739,3 +827,9 @@ const styles: Record<string, React.CSSProperties> = {
 		lineHeight: 1.6,
 	},
 };
+
+function clampRegisterPanelWidth(width: number, containerWidth: number): number {
+	const maxWidth = Math.max(MIN_REGISTER_PANEL_WIDTH_FALLBACK, Math.floor(containerWidth * MAX_REGISTER_PANEL_RATIO));
+	const minWidth = Math.min(MIN_REGISTER_PANEL_WIDTH, maxWidth);
+	return Math.min(Math.max(width, minWidth), maxWidth);
+}
