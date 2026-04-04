@@ -63,6 +63,8 @@ export function App(): JSX.Element {
 	const configRef = useRef(config);
 	const pendingRestoreTargetRef = useRef<string | null>(null);
 	const restoreAttemptSessionIdRef = useRef<string | null>(null);
+	const selectedStackSelectionKeyRef = useRef<string | null>(null);
+	const processedStackSelectionVersionRef = useRef(0);
 
 	// Paged memory state
 	const pagedMemory = usePagedMemory();
@@ -74,6 +76,7 @@ export function App(): JSX.Element {
 	// Track if we need to refresh on next stopped event
 	const pendingRefreshRef = useRef(false);
 	const pendingRegisterRefreshRef = useRef(false);
+	const [stackSelectionVersion, setStackSelectionVersion] = useState(0);
 
 	useEffect(() => {
 		configRef.current = config;
@@ -158,12 +161,24 @@ export function App(): JSX.Element {
 			});
 		});
 
+		const unsubCallStack = messageBus.on('callStackChanged', (payload) => {
+			const nextSelectionKey =
+				payload.selection.threadId !== null && payload.selection.frameId !== null
+					? `${payload.selection.threadId}:${payload.selection.frameId}`
+					: null;
+			if (selectedStackSelectionKeyRef.current !== nextSelectionKey) {
+				selectedStackSelectionKeyRef.current = nextSelectionKey;
+				setStackSelectionVersion((prev) => prev + 1);
+			}
+		});
+
 		// Initialize
 		init();
 
 		return () => {
 			unsubSession();
 			unsubDoc();
+			unsubCallStack();
 		};
 	}, []);
 
@@ -229,6 +244,25 @@ export function App(): JSX.Element {
 			loadRegisters(selectedRegisterSetId);
 		}
 	}, [state, selectedRegisterSetId]);
+
+	useEffect(() => {
+		const sessionStatus = 'session' in state ? state.session.status : 'none';
+		if (
+			stackSelectionVersion === 0 ||
+			stackSelectionVersion === processedStackSelectionVersionRef.current ||
+			sessionStatus !== 'stopped'
+		) {
+			return;
+		}
+
+		processedStackSelectionVersionRef.current = stackSelectionVersion;
+
+		if (state.phase === 'ready') {
+			void handleRefreshInternal();
+		} else if (state.phase === 'no-document') {
+			void loadRegisters(selectedRegisterSetId);
+		}
+	}, [stackSelectionVersion, state, selectedRegisterSetId]);
 
 	async function init(): Promise<void> {
 		try {

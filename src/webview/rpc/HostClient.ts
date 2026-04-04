@@ -15,6 +15,9 @@ import type {
 	RegisterItemSnapshot,
 	ViewStateSnapshot,
 	SaveViewStateResult,
+	ListCallStackResult,
+	SelectStackFrameResult,
+	GetDisassemblyResult,
 } from '../../protocol/methods.js';
 
 /**
@@ -135,5 +138,36 @@ export const HostClient = {
 	 */
 	async saveViewState(viewState: ViewStateSnapshot): Promise<SaveViewStateResult> {
 		return messageBus.request('saveViewState', { viewState });
+	},
+
+	/**
+	 * Lists threads and frames for the current stopped session.
+	 */
+	async listCallStack(): Promise<ListCallStackResult> {
+		return messageBus.request('listCallStack', {});
+	},
+
+	/**
+	 * Selects a frame as the active StackScope debugger context.
+	 */
+	async selectStackFrame(
+		threadId: number,
+		frameId: number,
+		options?: {
+			frameIndex?: number;
+			frameName?: string;
+			sourcePath?: string;
+			line?: number;
+			column?: number;
+		}
+	): Promise<SelectStackFrameResult> {
+		return messageBus.request('selectStackFrame', { threadId, frameId, ...options });
+	},
+
+	/**
+	 * Reads disassembly around the currently selected StackScope frame.
+	 */
+	async getDisassembly(): Promise<GetDisassemblyResult> {
+		return messageBus.request('getDisassembly', {});
 	},
 };
