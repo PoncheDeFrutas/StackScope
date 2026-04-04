@@ -69,6 +69,64 @@ export interface ViewStateSnapshot {
 	registerValueFormat: 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
 }
 
+/**
+ * Single stack frame for StackScope call stack UI.
+ */
+export interface StackFrameSnapshot {
+	id: number;
+	threadId: number;
+	name: string;
+	sourceName?: string;
+	sourcePath?: string;
+	line?: number;
+	column?: number;
+	instructionPointerReference?: string;
+}
+
+/**
+ * Thread with stack frames for the call stack view.
+ */
+export interface StackThreadSnapshot {
+	id: number;
+	name: string;
+	frames: StackFrameSnapshot[];
+}
+
+/**
+ * Current StackScope-owned debugger context selection.
+ */
+export interface StackSelectionSnapshot {
+	threadId: number | null;
+	frameId: number | null;
+}
+
+export type DebugNavigationMode = 'call-stack' | 'disassembly';
+
+/**
+ * Single disassembled instruction for the editor-tab disassembly view.
+ */
+export interface DisassembledInstructionSnapshot {
+	address: string;
+	instruction: string;
+	instructionBytes?: string;
+	symbol?: string;
+	sourceName?: string;
+	sourcePath?: string;
+	line?: number;
+	column?: number;
+	isCurrent: boolean;
+}
+
+/**
+ * Current disassembly window around the selected instruction pointer.
+ */
+export interface DisassemblySnapshot {
+	selection: StackSelectionSnapshot;
+	frame: StackFrameSnapshot | null;
+	instructions: DisassembledInstructionSnapshot[];
+	error?: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Init method
 // ─────────────────────────────────────────────────────────────────────────────
@@ -230,6 +288,42 @@ export interface SaveViewStateResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Call stack methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ListCallStackParams {
+	/* empty */
+}
+
+export interface ListCallStackResult {
+	threads: StackThreadSnapshot[];
+	selection: StackSelectionSnapshot;
+}
+
+export interface SelectStackFrameParams {
+	threadId: number;
+	frameId: number;
+	frameIndex?: number;
+	frameName?: string;
+	sourcePath?: string;
+	line?: number;
+	column?: number;
+}
+
+export interface SelectStackFrameResult {
+	success: boolean;
+	selection: StackSelectionSnapshot;
+}
+
+export interface GetDisassemblyParams {
+	/* empty */
+}
+
+export interface GetDisassemblyResult extends DisassemblySnapshot {
+	/* alias result */
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Method names (string literal union)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -246,7 +340,10 @@ export type MethodName =
 	| 'deleteRegisterSet'
 	| 'selectRegisterSet'
 	| 'readRegisters'
-	| 'saveViewState';
+	| 'saveViewState'
+	| 'listCallStack'
+	| 'selectStackFrame'
+	| 'getDisassembly';
 
 /**
  * Maps method names to their param/result types.
@@ -265,4 +362,7 @@ export interface MethodMap {
 	selectRegisterSet: { params: SelectRegisterSetParams; result: SelectRegisterSetResult };
 	readRegisters: { params: ReadRegistersParams; result: ReadRegistersResult };
 	saveViewState: { params: SaveViewStateParams; result: SaveViewStateResult };
+	listCallStack: { params: ListCallStackParams; result: ListCallStackResult };
+	selectStackFrame: { params: SelectStackFrameParams; result: SelectStackFrameResult };
+	getDisassembly: { params: GetDisassemblyParams; result: GetDisassemblyResult };
 }

@@ -4,6 +4,8 @@ import {
 	createOpenMemoryViewCommand,
 	createFocusMemoryViewCommand,
 	createOpenMemoryViewInEditorCommand,
+	createOpenCallStackInEditorCommand,
+	createOpenDisassemblyInEditorCommand,
 } from './commands/openMemoryViewCommand.js';
 import { MemoryViewProvider } from './providers/MemoryViewProvider.js';
 
@@ -34,7 +36,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		createOpenMemoryViewCommand(services.memoryViewProvider),
 		createFocusMemoryViewCommand(services.memoryViewProvider),
-		createOpenMemoryViewInEditorCommand(context.extensionUri, services.messageRouter)
+		createOpenMemoryViewInEditorCommand(services.editorTabService),
+		createOpenCallStackInEditorCommand(services.editorTabService),
+		createOpenDisassemblyInEditorCommand(services.editorTabService)
 	);
 
 	// Register session tracker for cleanup
@@ -45,6 +49,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Register provider for cleanup
 	context.subscriptions.push({
 		dispose: () => services?.memoryViewProvider.dispose(),
+	});
+
+	context.subscriptions.push({
+		dispose: () => services?.editorTabService.dispose(),
 	});
 
 	console.log('StackScope: Activated');

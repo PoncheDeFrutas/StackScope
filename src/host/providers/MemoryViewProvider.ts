@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
+import { getWebviewHtml } from '../webview/getWebviewHtml.js';
 
 /**
  * Webview view provider for StackScope memory panel.
@@ -34,7 +35,7 @@ export class MemoryViewProvider implements vscode.WebviewViewProvider {
 		this.messageRouter.attach(webviewView.webview);
 
 		webviewView.onDidDispose(() => {
-			this.messageRouter.detach();
+			this.messageRouter.detach(webviewView.webview);
 			this.view = null;
 		});
 
@@ -66,48 +67,17 @@ export class MemoryViewProvider implements vscode.WebviewViewProvider {
 	 * Disposes the provider.
 	 */
 	dispose(): void {
-		this.messageRouter.detach();
+		if (this.view) {
+			this.messageRouter.detach(this.view.webview);
+		}
 		this.view = null;
 	}
 
 	private getHtmlContent(webview: vscode.Webview): string {
-		const scriptUri = webview.asWebviewUri(
-			vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js')
-		);
-
-		const nonce = getNonce();
-
-		return `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
-	<title>StackScope Memory</title>
-	<style>
-		body {
-			margin: 0;
-			padding: 0;
-			font-family: var(--vscode-font-family);
-			font-size: var(--vscode-font-size);
-			color: var(--vscode-foreground);
-			background-color: var(--vscode-panel-background, var(--vscode-editor-background));
-		}
-	</style>
-</head>
-<body>
-	<div id="root"></div>
-	<script nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
+		return getWebviewHtml(webview, this.extensionUri, {
+			title: 'StackScope Memory',
+			viewKind: 'memory',
+			backgroundColor: 'var(--vscode-panel-background, var(--vscode-editor-background))',
+		});
 	}
-}
-
-function getNonce(): string {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
 }

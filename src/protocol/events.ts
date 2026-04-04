@@ -1,4 +1,11 @@
-import type { SessionSnapshot, DocumentSnapshot } from './methods.js';
+import type {
+	DebugNavigationMode,
+	DisassemblySnapshot,
+	SessionSnapshot,
+	DocumentSnapshot,
+	StackSelectionSnapshot,
+	StackThreadSnapshot,
+} from './methods.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session status changed event
@@ -17,10 +24,36 @@ export interface DocumentChangedPayload {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Call stack changed event
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CallStackChangedPayload {
+	threads: StackThreadSnapshot[];
+	selection: StackSelectionSnapshot;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Disassembly changed event
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DisassemblyChangedPayload extends DisassemblySnapshot {
+	/* same payload shape */
+}
+
+export interface DebugNavigationModeChangedPayload {
+	mode: DebugNavigationMode;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Event names
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EventName = 'sessionChanged' | 'documentChanged';
+export type EventName =
+	| 'sessionChanged'
+	| 'documentChanged'
+	| 'callStackChanged'
+	| 'disassemblyChanged'
+	| 'debugNavigationModeChanged';
 
 /**
  * Maps event names to their payload types.
@@ -28,4 +61,7 @@ export type EventName = 'sessionChanged' | 'documentChanged';
 export interface EventMap {
 	sessionChanged: SessionChangedPayload;
 	documentChanged: DocumentChangedPayload;
+	callStackChanged: CallStackChangedPayload;
+	disassemblyChanged: DisassemblyChangedPayload;
+	debugNavigationModeChanged: DebugNavigationModeChangedPayload;
 }

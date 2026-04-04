@@ -6,7 +6,9 @@ import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 import { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
 import { PresetService } from '../services/PresetService.js';
 import { RegisterSetService } from '../services/RegisterSetService.js';
+import { StackSelectionService } from '../services/StackSelectionService.js';
 import { ViewStateService } from '../services/ViewStateService.js';
+import { EditorTabService } from '../services/EditorTabService.js';
 
 /**
  * Container for all host-level services.
@@ -17,7 +19,9 @@ export interface HostServices {
 	documentRegistry: DocumentRegistry;
 	presetService: PresetService;
 	registerSetService: RegisterSetService;
+	stackSelectionService: StackSelectionService;
 	viewStateService: ViewStateService;
+	editorTabService: EditorTabService;
 	messageRouter: HostMessageRouter;
 	memoryViewProvider: MemoryViewProvider;
 }
@@ -35,15 +39,19 @@ export function createHostServices(
 	const documentRegistry = new DocumentRegistry();
 	const presetService = new PresetService(context);
 	const registerSetService = new RegisterSetService(context);
+	const stackSelectionService = new StackSelectionService();
 	const viewStateService = new ViewStateService(context);
+	const editorTabService = new EditorTabService(extensionUri);
 	const messageRouter = new HostMessageRouter(
 		sessionTracker,
 		debugGateway,
 		documentRegistry,
 		presetService,
 		registerSetService,
+		stackSelectionService,
 		viewStateService
 	);
+	editorTabService.setRouter(messageRouter);
 	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
 
 	return {
@@ -52,7 +60,9 @@ export function createHostServices(
 		documentRegistry,
 		presetService,
 		registerSetService,
+		stackSelectionService,
 		viewStateService,
+		editorTabService,
 		messageRouter,
 		memoryViewProvider,
 	};

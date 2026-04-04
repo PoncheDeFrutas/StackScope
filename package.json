@@ -19,9 +19,7 @@
     "Debuggers"
   ],
   "activationEvents": [
-    "onDebug",
-    "onCommand:stackscope.openMemoryView",
-    "onCommand:stackscope.openMemoryViewInEditor"
+    "onDebug"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -40,6 +38,16 @@
         "command": "stackscope.openMemoryViewInEditor",
         "title": "Open Memory View (Editor Tab)",
         "category": "StackScope"
+      },
+      {
+        "command": "stackscope.openCallStackInEditor",
+        "title": "Open Call Stack (Editor Tab)",
+        "category": "StackScope"
+      },
+      {
+        "command": "stackscope.openDisassemblyInEditor",
+        "title": "Open Disassembly (Editor Tab)",
+        "category": "StackScope"
       }
     ],
     "menus": {
@@ -52,6 +60,12 @@
         },
         {
           "command": "stackscope.openMemoryViewInEditor"
+        },
+        {
+          "command": "stackscope.openCallStackInEditor"
+        },
+        {
+          "command": "stackscope.openDisassemblyInEditor"
         }
       ]
     },

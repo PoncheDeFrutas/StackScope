@@ -1,5 +1,13 @@
 import * as vscode from 'vscode';
-import type { DebugGateway, ReadMemoryResult, RegisterEvalResult } from '../contracts/DebugGateway.js';
+import type {
+	DisassemblyResult,
+	DisassembledInstructionResult,
+	DebugGateway,
+	ReadMemoryResult,
+	RegisterEvalResult,
+	StackFrameResult,
+	StackThreadResult,
+} from '../contracts/DebugGateway.js';
 import { DapAddressResolver } from './DapAddressResolver.js';
 
 /**
@@ -78,7 +86,8 @@ export class DapDebugGateway implements DebugGateway {
 
 	async readRegisters(
 		sessionId: string,
-		expressions: string[]
+		expressions: string[],
+		frameId?: number
 	): Promise<RegisterEvalResult[]> {
 		const session = this.findSession(sessionId);
 		if (!session) {
@@ -90,13 +99,13 @@ export class DapDebugGateway implements DebugGateway {
 		}
 
 		// Get frame ID for evaluation context
-		const frameId = await this.getTopFrameId(session);
+		const effectiveFrameId = frameId ?? (await this.getTopFrameId(session));
 
 		// Evaluate all expressions in parallel
 		const results = await Promise.all(
 			expressions.map(async (expression): Promise<RegisterEvalResult> => {
 				try {
-					const value = await this.evaluateRegister(session, expression, frameId);
+					const value = await this.evaluateRegister(session, expression, effectiveFrameId);
 					return { expression, value };
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err);
@@ -106,6 +115,125 @@ export class DapDebugGateway implements DebugGateway {
 		);
 
 		return results;
+	}
+
+	async listCallStack(sessionId: string): Promise<StackThreadResult[]> {
+		const session = this.findSession(sessionId);
+		if (!session) {
+			return [];
+		}
+
+		try {
+			const threadsResponse = await session.customRequest('threads');
+			if (!threadsResponse?.threads?.length) {
+				return [];
+			}
+
+			const threads = threadsResponse.threads as Array<{ id: number; name?: string }>;
+
+			const stackResults = await Promise.all(
+				threads.map(async (thread): Promise<StackThreadResult> => {
+					try {
+						const stackResponse = await session.customRequest('stackTrace', {
+							threadId: thread.id,
+							startFrame: 0,
+							levels: 100,
+						});
+
+						const frames = Array.isArray(stackResponse?.stackFrames)
+							? stackResponse.stackFrames.map((frame: {
+								id: number;
+								name?: string;
+								line?: number;
+								column?: number;
+								instructionPointerReference?: string;
+								source?: { name?: string; path?: string };
+							}): StackFrameResult => ({
+								id: frame.id,
+								threadId: thread.id,
+								name: frame.name ?? `Frame ${frame.id}`,
+								sourceName: frame.source?.name,
+								sourcePath: frame.source?.path,
+								line: frame.line,
+								column: frame.column,
+								instructionPointerReference: frame.instructionPointerReference,
+							}))
+							: [];
+
+						return {
+							id: thread.id,
+							name: thread.name ?? `Thread ${thread.id}`,
+							frames,
+						};
+					} catch {
+						return {
+							id: thread.id,
+							name: thread.name ?? `Thread ${thread.id}`,
+							frames: [],
+						};
+					}
+				})
+			);
+
+			return stackResults;
+		} catch (err) {
+			console.error('[DapDebugGateway] listCallStack failed:', err);
+			return [];
+		}
+	}
+
+	async readDisassembly(
+		sessionId: string,
+		instructionPointerReference: string,
+		before: number,
+		after: number
+	): Promise<DisassemblyResult> {
+		const session = this.findSession(sessionId);
+		if (!session) {
+			return {
+				instructions: [],
+				error: 'No active session',
+			};
+		}
+
+		try {
+			const response = await session.customRequest('disassemble', {
+				memoryReference: instructionPointerReference,
+				instructionOffset: -Math.max(0, before),
+				instructionCount: Math.max(1, before + after + 1),
+				resolveSymbols: true,
+			});
+
+			const instructions = Array.isArray(response?.instructions)
+				? response.instructions.map((instruction: {
+					address: string;
+					instruction?: string;
+					instructionBytes?: string;
+					symbol?: string;
+					location?: { name?: string; path?: string };
+					line?: number;
+					column?: number;
+				}): DisassembledInstructionResult => ({
+					address: instruction.address,
+					instruction: instruction.instruction ?? '',
+					instructionBytes: instruction.instructionBytes,
+					symbol: instruction.symbol,
+					sourceName: instruction.location?.name,
+					sourcePath: instruction.location?.path,
+					line: instruction.line,
+					column: instruction.column,
+				}))
+				: [];
+
+			return { instructions };
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			console.error('[DapDebugGateway] readDisassembly failed:', err);
+			return {
+				instructions: [],
+				error: message,
+			};
+		}
 	}
 
 	private async evaluateRegister(

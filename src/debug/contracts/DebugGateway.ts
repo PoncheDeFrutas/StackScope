@@ -29,6 +29,51 @@ export interface RegisterEvalResult {
 }
 
 /**
+ * Single stack frame returned from the debugger.
+ */
+export interface StackFrameResult {
+	id: number;
+	threadId: number;
+	name: string;
+	sourceName?: string;
+	sourcePath?: string;
+	line?: number;
+	column?: number;
+	instructionPointerReference?: string;
+}
+
+/**
+ * Thread with its current stack frames.
+ */
+export interface StackThreadResult {
+	id: number;
+	name: string;
+	frames: StackFrameResult[];
+}
+
+/**
+ * Single disassembled instruction returned from the debugger.
+ */
+export interface DisassembledInstructionResult {
+	address: string;
+	instruction: string;
+	instructionBytes?: string;
+	symbol?: string;
+	sourceName?: string;
+	sourcePath?: string;
+	line?: number;
+	column?: number;
+}
+
+/**
+ * Result of reading disassembly for the current instruction window.
+ */
+export interface DisassemblyResult {
+	instructions: DisassembledInstructionResult[];
+	error?: string;
+}
+
+/**
  * Abstract contract for debugger memory operations.
  * All debugger access must go through this interface.
  */
@@ -69,6 +114,29 @@ export interface DebugGateway {
 	 */
 	readRegisters(
 		sessionId: string,
-		expressions: string[]
+		expressions: string[],
+		frameId?: number
 	): Promise<RegisterEvalResult[]>;
+
+	/**
+	 * Lists debugger threads and their stack frames.
+	 * @param sessionId - Debug session ID.
+	 * @returns Current threads and frames for the session.
+	 */
+	listCallStack(sessionId: string): Promise<StackThreadResult[]>;
+
+	/**
+	 * Reads a disassembly window around the selected frame instruction pointer.
+	 * @param sessionId - Debug session ID.
+	 * @param instructionPointerReference - Memory reference for the current instruction pointer.
+	 * @param before - Instructions requested before the current one.
+	 * @param after - Instructions requested after the current one.
+	 * @returns Disassembled instructions or an error description when unavailable.
+	 */
+	readDisassembly(
+		sessionId: string,
+		instructionPointerReference: string,
+		before: number,
+		after: number
+	): Promise<DisassemblyResult>;
 }
