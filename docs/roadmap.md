@@ -32,10 +32,11 @@ Status: implemented
 
 ### 3) Call stack integration
 
-Status: planned
+Status: implemented
 
-- Improve frame-aware workflows in memory/register inspection
-- Better integration with active stack/frame context
+- Added a unified StackScope debug-navigation editor tab with call stack and disassembly modes
+- Memory and register evaluation can use StackScope-selected frame context
+- Frame selection reveals source, switches the same tab to disassembly, and synchronizes StackScope without depending on VS Code's active frame
 
 ### 4) Hex/decoded cross-highlighting
 

@@ -13,6 +13,8 @@ This page describes current UI behavior from `src/webview/*`.
 5. `StatusBar`
 6. modal `RegisterSetEditor` when editing/creating sets
 
+Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNavigationApp.tsx`.
+
 ## App state phases
 
 `AppState` phases:
@@ -36,6 +38,23 @@ This page describes current UI behavior from `src/webview/*`.
 - If no document is active but a persisted target exists, the webview keeps that target and attempts a deferred reopen once a session is `stopped`.
 - Changed-byte highlighting only applies to offsets that had a known baseline before the previous `run`.
 - Changed-byte state is cleared when a new run starts or a different target/document is opened.
+- Call stack changes emitted by host cause memory/register views to refresh against the currently selected StackScope frame when possible.
+
+## Debug navigation behavior (`src/webview/DebugNavigationApp.tsx`)
+
+- Available through editor-tab commands `stackscope.openCallStackInEditor` and `stackscope.openDisassemblyInEditor`.
+- Both commands open the same StackScope navigation tab and choose the initial local mode.
+- The tab has two local modes:
+  - `Call Stack`: threads + frames
+  - `Disassembly`: instruction flow around the selected frame
+- Selecting a frame:
+  - stores a StackScope-owned thread/frame selection in host state
+  - reveals the frame source file if a local path is available
+  - switches the tab locally from `Call Stack` to `Disassembly`
+  - updates memory/register evaluation context independently from VS Code's native call stack selection
+- Disassembly highlights the current instruction and recenters when the debugger stop location changes.
+- Disassembly keeps the previous instruction list visible during step/refresh and marks it as syncing instead of replacing the whole view with a loading screen.
+- If the adapter does not support disassembly or the frame lacks an instruction pointer reference, the tab shows a message instead of crashing.
 
 ## View persistence behavior
 

@@ -25,6 +25,8 @@ The host rejects memory/register reads if session status is not `stopped`.
 - `StackScope: Open Memory View`
 - `StackScope: Focus Memory View`
 - `StackScope: Open Memory View (Editor Tab)`
+- `StackScope: Open Call Stack (Editor Tab)`
+- `StackScope: Open Disassembly (Editor Tab)`
 
 Registered in `package.json` and wired in `src/host/commands/openMemoryViewCommand.ts`.
 
@@ -38,6 +40,10 @@ Registered in `package.json` and wired in `src/host/commands/openMemoryViewComma
 5. Scroll memory grid; pages load lazily.
 6. Use settings panel to change columns, unit size, formats, and total size.
 7. Use register panel to select register set and value format.
+8. Open `StackScope: Open Call Stack (Editor Tab)` to inspect threads/frames beside the source file.
+9. Select a frame to reveal its source, switch the same tab to disassembly, and use that frame as the context for memory/register evaluation.
+10. Use `StackScope: Open Disassembly (Editor Tab)` if you want to open the same navigation tab directly in disassembly mode.
+11. Use the local mode switch in the navigation header to move between `Call Stack` and `Disassembly`.
 
 ## Target resolution behavior
 

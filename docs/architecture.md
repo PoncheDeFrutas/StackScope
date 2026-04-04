@@ -20,6 +20,7 @@ flowchart LR
   ROUTER --> GATEWAY[DapDebugGateway]
   ROUTER --> PRESETS[PresetService]
   ROUTER --> REGSETS[RegisterSetService]
+  ROUTER --> STACKSEL[StackSelectionService]
   ROUTER --> DOCS[DocumentRegistry]
   GATEWAY --> DAP[VS Code DebugSession customRequest]
   ROUTER -->|events| BUS
@@ -49,6 +50,7 @@ flowchart LR
 - `DocumentRegistry`
 - `PresetService`
 - `RegisterSetService`
+- `StackSelectionService`
 - `HostMessageRouter`
 - `MemoryViewProvider`
 
@@ -101,4 +103,5 @@ It also probes session status using `threads` and `stackTrace` in `probeSessionS
 
 - Panel view provider: `src/host/providers/MemoryViewProvider.ts`
 - Editor-tab command also creates a `WebviewPanel` with same bundled `dist/webview.js`.
+- The bundle can render memory or unified debug-navigation views based on the injected webview kind.
 - Router attach/detach is called on disposal/visibility transitions.
