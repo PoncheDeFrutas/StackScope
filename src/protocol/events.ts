@@ -21,6 +21,7 @@ export interface SessionChangedPayload {
 
 export interface DocumentChangedPayload {
 	document: DocumentSnapshot | null;
+	documents: DocumentSnapshot[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

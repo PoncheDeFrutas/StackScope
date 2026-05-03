@@ -19,7 +19,9 @@ import type { ViewStateService } from '../services/ViewStateService.js';
 import {
 	createMemoryDocument,
 	isLiteralAddress,
+	type MemoryDocument,
 } from '../../domain/documents/MemoryDocument.js';
+import { DEFAULT_CONFIG } from '../../domain/config/MemoryViewConfig.js';
 import { generateDocumentId } from '../../shared/ids.js';
 import { isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
 import { isBuiltinRegisterSet } from '../../domain/registers/RegisterSet.js';
@@ -106,6 +108,7 @@ export class HostMessageRouter {
 		this.handlers.set('init', async () => {
 			const state = await this.sessionTracker.refresh();
 			const activeDoc = this.documentRegistry.getActive();
+			const documents = this.documentRegistry.getAll();
 			const presets = this.presetService.getAll();
 			const registerSets = this.registerSetService.getAll();
 			const viewState = this.viewStateService.get();
@@ -115,13 +118,8 @@ export class HostMessageRouter {
 					sessionId: state.sessionId,
 					status: state.status,
 				},
-				activeDocument: activeDoc
-					? {
-						id: activeDoc.id,
-						address: activeDoc.address,
-						sessionId: activeDoc.sessionId,
-					}
-					: null,
+				activeDocument: activeDoc ? this.toDocumentSnapshot(activeDoc) : null,
+				documents: documents.map((doc) => this.toDocumentSnapshot(doc)),
 				presets: presets.map((p) => ({
 					id: p.id,
 					name: p.name,
@@ -220,7 +218,7 @@ export class HostMessageRouter {
 		});
 
 		this.handlers.set('openDocument', async (params) => {
-			const { target } = params as MethodMap['openDocument']['params'];
+			const { target, displayName, config } = params as MethodMap['openDocument']['params'];
 			const state = await this.sessionTracker.refresh();
 
 			if (!state.sessionId) {
@@ -259,26 +257,97 @@ export class HostMessageRouter {
 				target,
 				state.sessionId,
 				resolvedReference,
-				hasResolvedReference
+				hasResolvedReference,
+				config ?? DEFAULT_CONFIG,
+				displayName?.trim() || target
 			);
 
 			this.documentRegistry.add(doc);
 			this.documentRegistry.setActive(doc.id);
 
 			this.sendEvent('documentChanged', {
-				document: {
-					id: doc.id,
-					address: doc.address,
-					sessionId: doc.sessionId,
-				},
+				document: this.toDocumentSnapshot(doc),
+				documents: this.getDocumentSnapshots(),
 			});
 
 			return {
-				document: {
-					id: doc.id,
-					address: doc.address,
-					sessionId: doc.sessionId,
-				},
+				document: this.toDocumentSnapshot(doc),
+				documents: this.getDocumentSnapshots(),
+			};
+		});
+
+		this.handlers.set('listDocuments', async () => ({
+			documents: this.getDocumentSnapshots(),
+			activeDocument: this.getActiveDocumentSnapshot(),
+		}));
+
+		this.handlers.set('selectDocument', async (params) => {
+			const { id } = params as MethodMap['selectDocument']['params'];
+			const doc = this.documentRegistry.get(id);
+			if (!doc) {
+				throw createProtocolError(
+					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
+					`Document ${id} not found`
+				);
+			}
+			this.documentRegistry.setActive(id);
+
+			const snapshot = this.toDocumentSnapshot(doc);
+			this.sendEvent('documentChanged', {
+				document: snapshot,
+				documents: this.getDocumentSnapshots(),
+			});
+
+			return {
+				document: snapshot,
+				documents: this.getDocumentSnapshots(),
+			};
+		});
+
+		this.handlers.set('closeDocument', async (params) => {
+			const { id } = params as MethodMap['closeDocument']['params'];
+			const wasActive = this.documentRegistry.getActive()?.id === id;
+			this.documentRegistry.remove(id);
+			if (wasActive) {
+				const next = this.documentRegistry.getAll()[0] ?? null;
+				this.documentRegistry.setActive(next?.id ?? null);
+			}
+
+			const activeDoc = this.documentRegistry.getActive();
+			const activeSnapshot = activeDoc ? this.toDocumentSnapshot(activeDoc) : null;
+			this.sendEvent('documentChanged', {
+				document: activeSnapshot,
+				documents: this.getDocumentSnapshots(),
+			});
+
+			return {
+				activeDocument: activeSnapshot,
+				documents: this.getDocumentSnapshots(),
+			};
+		});
+
+		this.handlers.set('updateDocument', async (params) => {
+			const { id, displayName, config } = params as MethodMap['updateDocument']['params'];
+			const doc = this.documentRegistry.updateMetadata(id, {
+				displayName: displayName?.trim() || undefined,
+				config,
+			});
+			if (!doc) {
+				throw createProtocolError(
+					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
+					`Document ${id} not found`
+				);
+			}
+
+			const snapshot = this.toDocumentSnapshot(doc);
+			this.sendEvent('documentChanged', {
+				document: snapshot,
+				documents: this.getDocumentSnapshots(),
+			});
+
+			return {
+				document: snapshot,
+				documents: this.getDocumentSnapshots(),
 			};
 		});
 
@@ -546,6 +615,25 @@ export class HostMessageRouter {
 		response: ProtocolResponse<unknown>
 	): void {
 		void webview.postMessage(response);
+	}
+
+	private toDocumentSnapshot(doc: MemoryDocument): MethodMap['listDocuments']['result']['documents'][number] {
+		return {
+			id: doc.id,
+			address: doc.address,
+			displayName: doc.displayName,
+			sessionId: doc.sessionId,
+			config: doc.config,
+		};
+	}
+
+	private getDocumentSnapshots(): MethodMap['listDocuments']['result']['documents'] {
+		return this.documentRegistry.getAll().map((doc) => this.toDocumentSnapshot(doc));
+	}
+
+	private getActiveDocumentSnapshot(): MethodMap['listDocuments']['result']['activeDocument'] {
+		const doc = this.documentRegistry.getActive();
+		return doc ? this.toDocumentSnapshot(doc) : null;
 	}
 
 	private getSelectionSnapshot(): StackSelectionSnapshot {

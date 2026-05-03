@@ -15,7 +15,8 @@ import {
 interface SettingsPanelProps {
 	config: MemoryViewConfig;
 	currentTarget: string;
-	onApply: (config: MemoryViewConfig, target: string) => void;
+	currentDisplayName: string;
+	onApply: (config: MemoryViewConfig, target: string, displayName: string) => void;
 	onCancel: () => void;
 	disabled?: boolean;
 }
@@ -27,12 +28,14 @@ interface SettingsPanelProps {
 export function SettingsPanel({
 	config,
 	currentTarget,
+	currentDisplayName,
 	onApply,
 	onCancel,
 	disabled = false,
 }: SettingsPanelProps): JSX.Element {
 	// Draft state
 	const [target, setTarget] = useState(currentTarget);
+	const [displayName, setDisplayName] = useState(currentDisplayName);
 	const [columns, setColumns] = useState(config.columns);
 	const [unitSize, setUnitSize] = useState<UnitSize>(config.unitSize);
 	const [endianness, setEndianness] = useState<Endianness>(config.endianness);
@@ -70,11 +73,12 @@ export function SettingsPanel({
 		}
 
 		setErrors([]);
-		onApply(newConfig, target.trim());
-	}, [columns, unitSize, endianness, totalSizeInput, numberFormat, decodedMode, target, onApply]);
+		onApply(newConfig, target.trim(), displayName.trim() || target.trim());
+	}, [columns, unitSize, endianness, totalSizeInput, numberFormat, decodedMode, target, displayName, onApply]);
 
 	const hasChanges =
 		target !== currentTarget ||
+		displayName !== currentDisplayName ||
 		columns !== config.columns ||
 		unitSize !== config.unitSize ||
 		endianness !== config.endianness ||
@@ -90,6 +94,17 @@ export function SettingsPanel({
 
 			<div style={styles.form}>
 				{/* Target Address */}
+				<div style={styles.field}>
+					<label style={styles.label}>View Name</label>
+					<input
+						type="text"
+						value={displayName}
+						onChange={(e) => setDisplayName(e.target.value)}
+						placeholder="Stack, buffer, peripheral..."
+						style={styles.input}
+					/>
+				</div>
+
 				<div style={styles.field}>
 					<label style={styles.label}>Address / Expression</label>
 					<input

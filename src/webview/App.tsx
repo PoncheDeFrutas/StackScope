@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
-import { VirtualMemoryGrid } from './components/VirtualMemoryGrid.js';
+import { VirtualMemoryGrid, type MemorySelection } from './components/VirtualMemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Toolbar } from './components/Toolbar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
@@ -42,6 +42,7 @@ const VIEW_STATE_SAVE_DEBOUNCE_MS = 200;
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
 	const [config, setConfig] = useState<MemoryViewConfig>(DEFAULT_CONFIG);
+	const [documents, setDocuments] = useState<DocumentSnapshot[]>([]);
 	const [presets, setPresets] = useState<PresetSnapshot[]>([]);
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 	const [showSettings, setShowSettings] = useState(false);
@@ -71,6 +72,7 @@ export function App(): JSX.Element {
 
 	// Track previous data for change highlighting
 	const [changedBytes, setChangedBytes] = useState<ByteChangeMap>(new Map());
+	const [memorySelection, setMemorySelection] = useState<MemorySelection | null>(null);
 	const baselineRef = useRef<Map<number, number | null>>(new Map());
 
 	// Track if we need to refresh on next stopped event
@@ -132,10 +134,12 @@ export function App(): JSX.Element {
 
 		// Subscribe to document changes
 		const unsubDoc = messageBus.on('documentChanged', (payload) => {
+			setDocuments(payload.documents);
 			setState((prev) => {
 				if (!payload.document) {
 					baselineRef.current = new Map();
 					setChangedBytes(new Map());
+					setMemorySelection(null);
 					if ('session' in prev) {
 						return { phase: 'no-document', session: prev.session };
 					}
@@ -146,10 +150,12 @@ export function App(): JSX.Element {
 					pagedMemory.reset(
 						payload.document.id,
 						payload.document.address,
-						configRef.current.totalSize
+						payload.document.config.totalSize
 					);
+					setConfig(payload.document.config);
 					baselineRef.current = new Map();
 					setChangedBytes(new Map());
+					setMemorySelection(null);
 					setCurrentTarget(payload.document.address);
 					return {
 						phase: 'ready',
@@ -268,9 +274,10 @@ export function App(): JSX.Element {
 		try {
 			const result = await HostClient.init();
 			const restoredViewState = result.viewState;
-			const restoredConfig = restoredViewState?.config ?? DEFAULT_CONFIG;
+			const restoredConfig = result.activeDocument?.config ?? restoredViewState?.config ?? DEFAULT_CONFIG;
 			const restoredTarget = result.activeDocument?.address ?? restoredViewState?.currentTarget ?? '';
 
+			setDocuments(result.documents);
 			// Store presets from init
 			setPresets(result.presets);
 
@@ -309,7 +316,7 @@ export function App(): JSX.Element {
 			pagedMemory.reset(
 				result.activeDocument.id,
 				result.activeDocument.address,
-				restoredConfig.totalSize
+				result.activeDocument.config.totalSize
 			);
 
 			setState({
@@ -367,7 +374,7 @@ export function App(): JSX.Element {
 
 	const handleOpenDocument = useCallback(async (
 		target: string,
-		options?: { preservePendingRestore?: boolean }
+		options?: { preservePendingRestore?: boolean; displayName?: string; config?: MemoryViewConfig }
 	): Promise<boolean> => {
 		setCurrentTarget(target);
 		setSelectedPresetId(null);
@@ -383,7 +390,11 @@ export function App(): JSX.Element {
 		});
 
 		try {
-			const result = await HostClient.openDocument(target);
+			const result = await HostClient.openDocument(target, {
+				displayName: options?.displayName ?? target,
+				config: options?.config ?? config,
+			});
+			setDocuments(result.documents);
 
 			// Reset paged memory for new document
 			pagedMemory.reset(result.document.id, result.document.address, config.totalSize);
@@ -391,6 +402,7 @@ export function App(): JSX.Element {
 			// Clear change tracking
 			baselineRef.current = new Map();
 			setChangedBytes(new Map());
+			setMemorySelection(null);
 
 			setState((prev) => {
 				if ('session' in prev) {
@@ -416,7 +428,110 @@ export function App(): JSX.Element {
 			});
 			return false;
 		}
-	}, [config.totalSize, pagedMemory]);
+	}, [config, pagedMemory]);
+
+	const handleSelectDocument = useCallback(async (id: string) => {
+		try {
+			const result = await HostClient.selectDocument(id);
+			setDocuments(result.documents);
+			setConfig(result.document.config);
+			setCurrentTarget(result.document.address);
+			setSelectedPresetId(null);
+			pagedMemory.reset(result.document.id, result.document.address, result.document.config.totalSize);
+			baselineRef.current = new Map();
+			setChangedBytes(new Map());
+			setMemorySelection(null);
+			setState((prev) => {
+				if ('session' in prev) {
+					return {
+						phase: 'ready',
+						session: prev.session,
+						document: result.document,
+					};
+				}
+				return prev;
+			});
+		} catch (err) {
+			console.error('Failed to select document:', err);
+		}
+	}, [pagedMemory]);
+
+	const handleCloseDocument = useCallback(async (id: string) => {
+		try {
+			const result = await HostClient.closeDocument(id);
+			setDocuments(result.documents);
+			baselineRef.current = new Map();
+			setChangedBytes(new Map());
+			setMemorySelection(null);
+			if (result.activeDocument) {
+				const nextDocument = result.activeDocument;
+				setConfig(nextDocument.config);
+				setCurrentTarget(nextDocument.address);
+				pagedMemory.reset(
+					nextDocument.id,
+					nextDocument.address,
+					nextDocument.config.totalSize
+				);
+				setState((prev) => {
+					if ('session' in prev) {
+						return {
+							phase: 'ready',
+							session: prev.session,
+							document: nextDocument,
+						};
+					}
+					return prev;
+				});
+				return;
+			}
+
+			pagedMemory.reset('', '0x0', 0);
+			setCurrentTarget('');
+			setState((prev) => {
+				if ('session' in prev) {
+					return { phase: 'no-document', session: prev.session };
+				}
+				return prev;
+			});
+		} catch (err) {
+			console.error('Failed to close document:', err);
+		}
+	}, [pagedMemory]);
+
+	const handleCopySelection = useCallback(() => {
+		if (!memorySelection) {
+			return;
+		}
+		const count = memorySelection.endOffset - memorySelection.startOffset + 1;
+		const bytes = pagedMemory.getBytes(memorySelection.startOffset, count);
+		if (!bytes) {
+			console.warn('Selected bytes are not loaded yet.');
+			return;
+		}
+		void copyTextToClipboard(formatByteDump(
+			pagedMemory.state.baseAddress,
+			memorySelection.startOffset,
+			bytes
+		));
+	}, [memorySelection, pagedMemory]);
+
+	const handleCopyLoaded = useCallback(() => {
+		const chunks = Array.from(pagedMemory.state.pages.values())
+			.sort((a, b) => a.offset - b.offset)
+			.map((page) => {
+				const remaining = Math.max(0, pagedMemory.state.totalSize - page.offset);
+				return formatByteDump(
+					pagedMemory.state.baseAddress,
+					page.offset,
+					page.data.slice(0, remaining)
+				);
+			})
+			.filter(Boolean);
+		if (chunks.length === 0) {
+			return;
+		}
+		void copyTextToClipboard(chunks.join('\n'));
+	}, [pagedMemory.state.baseAddress, pagedMemory.state.pages, pagedMemory.state.totalSize]);
 
 	useEffect(() => {
 		const sessionId = 'session' in state ? state.session.sessionId : null;
@@ -486,21 +601,36 @@ export function App(): JSX.Element {
 		setShowSettings((prev) => !prev);
 	}, []);
 
-	const handleApplySettings = useCallback((newConfig: MemoryViewConfig, target: string) => {
+	const handleApplySettings = useCallback((newConfig: MemoryViewConfig, target: string, displayName: string) => {
 		setConfig(newConfig);
 		setShowSettings(false);
 
-		// Update total size in paged memory if changed
-		if (state.phase === 'ready' && pagedMemory.state.documentId) {
+		if (state.phase === 'ready') {
+			if (target !== currentTarget) {
+				void handleOpenDocument(target, { displayName, config: newConfig });
+				return;
+			}
+
+			void HostClient.updateDocument(state.document.id, {
+				displayName,
+				config: newConfig,
+			}).then((result) => {
+				setDocuments(result.documents);
+				setState((prev) => {
+					if (prev.phase === 'ready' && prev.document.id === result.document.id) {
+						return { ...prev, document: result.document };
+					}
+					return prev;
+				});
+			}).catch((err) => {
+				console.error('Failed to update document settings:', err);
+			});
+
 			pagedMemory.reset(
-				pagedMemory.state.documentId,
+				state.document.id,
 				pagedMemory.state.baseAddress,
 				newConfig.totalSize
 			);
-		}
-
-		if (target !== currentTarget) {
-			handleOpenDocument(target);
 		}
 	}, [currentTarget, handleOpenDocument, state, pagedMemory]);
 
@@ -650,27 +780,39 @@ export function App(): JSX.Element {
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 	const changedByteCount = getChangedByteCount(changedBytes);
+	const activeDocument = state.phase === 'ready' ? state.document : null;
+	const selectedByteCount = memorySelection
+		? memorySelection.endOffset - memorySelection.startOffset + 1
+		: 0;
 
 	return (
 		<div style={styles.container}>
 			<Toolbar
 				sessionStatus={sessionStatus}
+				documents={documents}
+				activeDocumentId={activeDocument?.id ?? null}
 				presets={presets}
 				selectedPresetId={selectedPresetId}
 				onOpenDocument={handleOpenDocument}
+				onSelectDocument={handleSelectDocument}
+				onCloseDocument={handleCloseDocument}
 				onSelectPreset={handleSelectPreset}
 				onSavePreset={handleSavePreset}
 				onDeletePreset={handleDeletePreset}
 				onRefresh={handleRefresh}
+				onCopySelection={handleCopySelection}
+				onCopyLoaded={handleCopyLoaded}
 				onToggleSettings={handleToggleSettings}
 				isLoading={isLoading}
 				showSettings={showSettings}
 				currentTarget={currentTarget}
+				selectedByteCount={selectedByteCount}
 			/>
 			{showSettings && (
 				<SettingsPanel
 					config={config}
 					currentTarget={currentTarget}
+					currentDisplayName={activeDocument?.displayName ?? currentTarget}
 					onApply={handleApplySettings}
 					onCancel={handleCancelSettings}
 					disabled={sessionStatus !== 'stopped'}
@@ -686,7 +828,15 @@ export function App(): JSX.Element {
 			>
 				{/* Memory content */}
 				<div style={styles.content}>
-					{renderContent(state, config, pagedMemory, handleVisibleRangeChange, changedBytes)}
+					{renderContent(
+						state,
+						config,
+						pagedMemory,
+						handleVisibleRangeChange,
+						changedBytes,
+						memorySelection,
+						setMemorySelection
+					)}
 				</div>
 				{showRegisterPanel ? (
 					<>
@@ -765,7 +915,9 @@ function renderContent(
 	config: MemoryViewConfig,
 	pagedMemory: ReturnType<typeof usePagedMemory>,
 	onVisibleRangeChange: (start: number, end: number) => void,
-	changedBytes: ByteChangeMap
+	changedBytes: ByteChangeMap,
+	memorySelection: MemorySelection | null,
+	onSelectionChange: (selection: MemorySelection | null) => void
 ): JSX.Element {
 	switch (state.phase) {
 		case 'loading':
@@ -814,6 +966,8 @@ function renderContent(
 					numberFormat={config.numberFormat}
 					decodedMode={config.decodedMode}
 					changedBytes={changedBytes}
+					selection={memorySelection}
+					onSelectionChange={onSelectionChange}
 				/>
 			);
 
@@ -840,6 +994,48 @@ function Message({ children, error }: MessageProps): JSX.Element {
 			{children}
 		</div>
 	);
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+	try {
+		await navigator.clipboard.writeText(text);
+	} catch (err) {
+		console.error('Failed to copy memory bytes:', err);
+	}
+}
+
+function formatByteDump(
+	baseAddress: string,
+	startOffset: number,
+	bytes: (number | null)[]
+): string {
+	const base = parseAddress(baseAddress);
+	const lines: string[] = [];
+	const bytesPerLine = 16;
+
+	for (let index = 0; index < bytes.length; index += bytesPerLine) {
+		const lineOffset = startOffset + index;
+		const address = base + BigInt(lineOffset);
+		const chunk = bytes.slice(index, index + bytesPerLine);
+		const values = chunk.map((byte) => byte === null
+			? '~~'
+			: byte.toString(16).toUpperCase().padStart(2, '0'));
+		lines.push(`${formatDumpAddress(address)}  ${values.join(' ')}`);
+	}
+
+	return lines.join('\n');
+}
+
+function parseAddress(address: string): bigint {
+	try {
+		return BigInt(address);
+	} catch {
+		return 0n;
+	}
+}
+
+function formatDumpAddress(address: bigint): string {
+	return '0x' + address.toString(16).padStart(16, '0').toUpperCase();
 }
 
 function ChevronLeftIcon(): JSX.Element {

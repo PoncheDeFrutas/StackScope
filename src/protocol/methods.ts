@@ -14,7 +14,9 @@ export interface SessionSnapshot {
 export interface DocumentSnapshot {
 	id: string;
 	address: string;
+	displayName: string;
 	sessionId: string;
+	config: MemoryViewConfig;
 }
 
 /**
@@ -138,6 +140,7 @@ export interface InitParams {
 export interface InitResult {
 	session: SessionSnapshot;
 	activeDocument: DocumentSnapshot | null;
+	documents: DocumentSnapshot[];
 	presets: PresetSnapshot[];
 	registerSets: RegisterSetSnapshot[];
 	selectedRegisterSetId: string;
@@ -181,10 +184,55 @@ export interface OpenDocumentParams {
 	 * - A symbol/expression (e.g., "main", "&myVariable")
 	 */
 	target: string;
+	displayName?: string;
+	config?: MemoryViewConfig;
 }
 
 export interface OpenDocumentResult {
 	document: DocumentSnapshot;
+	documents: DocumentSnapshot[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ListDocumentsParams {
+	/* empty */
+}
+
+export interface ListDocumentsResult {
+	documents: DocumentSnapshot[];
+	activeDocument: DocumentSnapshot | null;
+}
+
+export interface SelectDocumentParams {
+	id: string;
+}
+
+export interface SelectDocumentResult {
+	document: DocumentSnapshot;
+	documents: DocumentSnapshot[];
+}
+
+export interface CloseDocumentParams {
+	id: string;
+}
+
+export interface CloseDocumentResult {
+	activeDocument: DocumentSnapshot | null;
+	documents: DocumentSnapshot[];
+}
+
+export interface UpdateDocumentParams {
+	id: string;
+	displayName?: string;
+	config?: MemoryViewConfig;
+}
+
+export interface UpdateDocumentResult {
+	document: DocumentSnapshot;
+	documents: DocumentSnapshot[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,6 +379,10 @@ export type MethodName =
 	| 'init' 
 	| 'readMemory' 
 	| 'openDocument'
+	| 'listDocuments'
+	| 'selectDocument'
+	| 'closeDocument'
+	| 'updateDocument'
 	| 'listPresets'
 	| 'savePreset'
 	| 'deletePreset'
@@ -352,6 +404,10 @@ export interface MethodMap {
 	init: { params: InitParams; result: InitResult };
 	readMemory: { params: ReadMemoryParams; result: ReadMemoryResult };
 	openDocument: { params: OpenDocumentParams; result: OpenDocumentResult };
+	listDocuments: { params: ListDocumentsParams; result: ListDocumentsResult };
+	selectDocument: { params: SelectDocumentParams; result: SelectDocumentResult };
+	closeDocument: { params: CloseDocumentParams; result: CloseDocumentResult };
+	updateDocument: { params: UpdateDocumentParams; result: UpdateDocumentResult };
 	listPresets: { params: ListPresetsParams; result: ListPresetsResult };
 	savePreset: { params: SavePresetParams; result: SavePresetResult };
 	deletePreset: { params: DeletePresetParams; result: DeletePresetResult };

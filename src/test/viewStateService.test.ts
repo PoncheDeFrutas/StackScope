@@ -61,7 +61,10 @@ suite('ViewStateService', () => {
 
 		assert.deepStrictEqual(result, {
 			currentTarget: '',
-			config: DEFAULT_CONFIG,
+			config: {
+				...DEFAULT_CONFIG,
+				totalSize: 256,
+			},
 			showSettings: false,
 			showRegisterPanel: true,
 			registerPanelWidth: 320,

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useRef, useCallback, useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import type { UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
 import { calculateVisibleRange } from '../hooks/usePagedMemory.js';
 import {
@@ -16,6 +16,12 @@ export type NumberFormat = 'hex' | 'dec' | 'oct' | 'bin';
 
 /** Decoded bytes display mode */
 export type DecodedMode = 'ascii' | 'uint8' | 'int8' | 'bin' | 'hidden';
+
+export interface MemorySelection {
+	anchorOffset: number;
+	startOffset: number;
+	endOffset: number;
+}
 
 interface VirtualMemoryGridProps {
 	/** Base address (hex string) */
@@ -38,6 +44,10 @@ interface VirtualMemoryGridProps {
 	decodedMode?: DecodedMode;
 	/** Set of changed byte offsets (for highlighting) */
 	changedBytes?: ByteChangeMap;
+	/** Selected byte range. */
+	selection?: MemorySelection | null;
+	/** Called when the user changes the selected byte range. */
+	onSelectionChange?: (selection: MemorySelection | null) => void;
 	/** Previous data for comparison (baseline) */
 	previousData?: Map<number, number | null>;
 }
@@ -109,6 +119,8 @@ export function VirtualMemoryGrid({
 	numberFormat = 'hex',
 	decodedMode = 'ascii',
 	changedBytes,
+	selection,
+	onSelectionChange,
 	previousData,
 }: VirtualMemoryGridProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -165,6 +177,28 @@ export function VirtualMemoryGrid({
 			setScrollTop(containerRef.current.scrollTop);
 		}
 	}, []);
+
+	const handleCellPointerDown = useCallback(
+		(offset: number, event: ReactPointerEvent<HTMLElement>) => {
+			if (event.button !== 0) {
+				return;
+			}
+			event.preventDefault();
+			const anchor = event.shiftKey && selection ? selection.anchorOffset : offset;
+			onSelectionChange?.(createSelection(anchor, offset));
+		},
+		[onSelectionChange, selection]
+	);
+
+	const handleCellPointerEnter = useCallback(
+		(offset: number, event: ReactPointerEvent<HTMLElement>) => {
+			if ((event.buttons & 1) !== 1 || !selection) {
+				return;
+			}
+			onSelectionChange?.(createSelection(selection.anchorOffset, offset));
+		},
+		[onSelectionChange, selection]
+	);
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -223,6 +257,9 @@ export function VirtualMemoryGrid({
 				decodedCellWidthCh={decodedCellWidthCh}
 				midPoint={midPoint}
 				changedBytes={changedBytes}
+				selection={selection}
+				onCellPointerDown={handleCellPointerDown}
+				onCellPointerEnter={handleCellPointerEnter}
 				fadeNow={fadeNow}
 			/>
 		);
@@ -342,6 +379,9 @@ interface MemoryRowProps {
 	decodedCellWidthCh: number;
 	midPoint: number;
 	changedBytes?: ByteChangeMap;
+	selection?: MemorySelection | null;
+	onCellPointerDown: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
+	onCellPointerEnter: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
 	fadeNow: number;
 }
 
@@ -359,6 +399,9 @@ function MemoryRow({
 	decodedCellWidthCh,
 	midPoint,
 	changedBytes,
+	selection,
+	onCellPointerDown,
+	onCellPointerEnter,
 	fadeNow,
 }: MemoryRowProps): JSX.Element {
 	const hexCells: JSX.Element[] = [];
@@ -388,6 +431,7 @@ function MemoryRow({
 			}
 		}
 		const unitChanged = unitChangedAt !== null;
+		const unitSelected = isRangeSelected(selection, rowOffset + startIdx, rowOffset + startIdx + unitSize - 1);
 		const changedOpacity = unitChangedAt === null
 			? undefined
 			: getChangedCellOpacity(unitChangedAt, fadeNow, CHANGE_HIGHLIGHT_FADE_MS);
@@ -402,10 +446,28 @@ function MemoryRow({
 			hexContent = formatUnit(unitBytes!, unitSize, endianness, numberFormat);
 		}
 
-		const hexVariant = isLoading ? 'loading' : isUnreadable ? 'unreadable' : unitChanged ? 'changed' : 'hex';
+		const hexVariant = isLoading
+			? 'loading'
+			: isUnreadable
+				? 'unreadable'
+				: unitSelected && unitChanged
+					? 'selectedChanged'
+					: unitSelected
+						? 'selected'
+						: unitChanged
+							? 'changed'
+							: 'hex';
 
 		hexCells.push(
-			<ByteCell key={`hex-${col}`} widthCh={cellWidthCh} variant={hexVariant} changedOpacity={changedOpacity}>
+			<ByteCell
+				key={`hex-${col}`}
+				widthCh={cellWidthCh}
+				variant={hexVariant}
+				changedOpacity={changedOpacity}
+				offset={rowOffset + startIdx}
+				onPointerDown={onCellPointerDown}
+				onPointerEnter={onCellPointerEnter}
+			>
 				{hexContent}
 			</ByteCell>
 		);
@@ -413,6 +475,7 @@ function MemoryRow({
 		// Format decoded content (same width as hex for 1:1 alignment)
 		if (showDecoded) {
 			const byte = unitBytes && unitBytes.length > 0 ? unitBytes[0] : null;
+			const decodedSelected = isRangeSelected(selection, rowOffset + startIdx, rowOffset + startIdx);
 			let decodedContent: string;
 
 			if (isLoading) {
@@ -423,10 +486,28 @@ function MemoryRow({
 				decodedContent = formatDecodedByte(byte, decodedMode, decodedCellWidthCh);
 			}
 
-			const decodedVariant = isLoading ? 'loading' : byte === null ? 'unreadable' : unitChanged ? 'changed' : 'decoded';
+			const decodedVariant = isLoading
+				? 'loading'
+				: byte === null
+					? 'unreadable'
+					: decodedSelected && unitChanged
+						? 'selectedChanged'
+						: decodedSelected
+							? 'selected'
+							: unitChanged
+								? 'changed'
+								: 'decoded';
 
 			decodedCells.push(
-				<ByteCell key={`dec-${col}`} widthCh={decodedCellWidthCh} variant={decodedVariant} changedOpacity={changedOpacity}>
+				<ByteCell
+					key={`dec-${col}`}
+					widthCh={decodedCellWidthCh}
+					variant={decodedVariant}
+					changedOpacity={changedOpacity}
+					offset={rowOffset + startIdx}
+					onPointerDown={onCellPointerDown}
+					onPointerEnter={onCellPointerEnter}
+				>
 					{decodedContent}
 				</ByteCell>
 			);
@@ -452,20 +533,31 @@ function MemoryRow({
 // Shared Cell Components
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CellVariant = 'header' | 'hex' | 'decoded' | 'loading' | 'unreadable' | 'changed';
+type CellVariant = 'header' | 'hex' | 'decoded' | 'loading' | 'unreadable' | 'changed' | 'selected' | 'selectedChanged';
 
 interface ByteCellProps {
 	widthCh: number;
 	variant: CellVariant;
 	children: string;
 	changedOpacity?: number;
+	offset?: number;
+	onPointerDown?: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
+	onPointerEnter?: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
 }
 
 /**
  * A single byte cell - used for both hex and decoded values.
  * Same font, same sizing, same structure for perfect alignment.
  */
-function ByteCell({ widthCh, variant, children, changedOpacity }: ByteCellProps): JSX.Element {
+function ByteCell({
+	widthCh,
+	variant,
+	children,
+	changedOpacity,
+	offset,
+	onPointerDown,
+	onPointerEnter,
+}: ByteCellProps): JSX.Element {
 	const variantStyle = variantStyles[variant] || {};
 	const changedStyle = variant === 'changed' && changedOpacity !== undefined
 		? { opacity: changedOpacity }
@@ -478,6 +570,8 @@ function ByteCell({ widthCh, variant, children, changedOpacity }: ByteCellProps)
 				...variantStyle,
 				...changedStyle,
 			}}
+			onPointerDown={offset === undefined ? undefined : (event) => onPointerDown?.(offset, event)}
+			onPointerEnter={offset === undefined ? undefined : (event) => onPointerEnter?.(offset, event)}
 		>
 			{children}
 		</span>
@@ -603,6 +697,25 @@ function formatAddress(addr: bigint): string {
 	return '0x' + addr.toString(16).padStart(16, '0').toUpperCase();
 }
 
+function createSelection(anchorOffset: number, activeOffset: number): MemorySelection {
+	return {
+		anchorOffset,
+		startOffset: Math.min(anchorOffset, activeOffset),
+		endOffset: Math.max(anchorOffset, activeOffset),
+	};
+}
+
+function isRangeSelected(
+	selection: MemorySelection | null | undefined,
+	startOffset: number,
+	endOffset: number
+): boolean {
+	if (!selection) {
+		return false;
+	}
+	return startOffset <= selection.endOffset && endOffset >= selection.startOffset;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles - shared primitives for both hex and decoded
 // ─────────────────────────────────────────────────────────────────────────────
@@ -670,6 +783,8 @@ const styles: Record<string, CSSProperties> = {
 		flexShrink: 0,
 		overflow: 'hidden',
 		transition: 'opacity 120ms linear',
+		cursor: 'default',
+		userSelect: 'none',
 	},
 };
 
@@ -697,6 +812,17 @@ const variantStyles: Record<CellVariant, CSSProperties> = {
 	changed: {
 		backgroundColor: 'var(--vscode-diffEditor-insertedTextBackground, rgba(155, 185, 85, 0.2))',
 		color: 'var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)',
+		borderRadius: '2px',
+	},
+	selected: {
+		backgroundColor: 'var(--vscode-editor-selectionBackground)',
+		color: 'var(--vscode-editor-selectionForeground)',
+		borderRadius: '2px',
+	},
+	selectedChanged: {
+		backgroundColor: 'var(--vscode-editor-selectionBackground)',
+		color: 'var(--vscode-editor-selectionForeground)',
+		boxShadow: 'inset 0 -2px 0 var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)',
 		borderRadius: '2px',
 	},
 };

@@ -3,6 +3,10 @@ import type {
 	InitResult,
 	ReadMemoryResult,
 	OpenDocumentResult,
+	ListDocumentsResult,
+	SelectDocumentResult,
+	CloseDocumentResult,
+	UpdateDocumentResult,
 	ListPresetsResult,
 	SavePresetResult,
 	DeletePresetResult,
@@ -19,6 +23,7 @@ import type {
 	SelectStackFrameResult,
 	GetDisassemblyResult,
 } from '../../protocol/methods.js';
+import type { MemoryViewConfig } from '../../domain/config/MemoryViewConfig.js';
 
 /**
  * Typed client for host RPC calls.
@@ -47,8 +52,42 @@ export const HostClient = {
 	 * Opens a memory document for the given target.
 	 * Target can be: hex address, register ($pc, $sp), or expression.
 	 */
-	async openDocument(target: string): Promise<OpenDocumentResult> {
-		return messageBus.request('openDocument', { target });
+	async openDocument(
+		target: string,
+		options?: { displayName?: string; config?: MemoryViewConfig }
+	): Promise<OpenDocumentResult> {
+		return messageBus.request('openDocument', { target, ...options });
+	},
+
+	/**
+	 * Lists open memory documents.
+	 */
+	async listDocuments(): Promise<ListDocumentsResult> {
+		return messageBus.request('listDocuments', {});
+	},
+
+	/**
+	 * Selects an existing memory document.
+	 */
+	async selectDocument(id: string): Promise<SelectDocumentResult> {
+		return messageBus.request('selectDocument', { id });
+	},
+
+	/**
+	 * Closes an existing memory document.
+	 */
+	async closeDocument(id: string): Promise<CloseDocumentResult> {
+		return messageBus.request('closeDocument', { id });
+	},
+
+	/**
+	 * Updates metadata for an existing memory document.
+	 */
+	async updateDocument(
+		id: string,
+		updates: { displayName?: string; config?: MemoryViewConfig }
+	): Promise<UpdateDocumentResult> {
+		return messageBus.request('updateDocument', { id, ...updates });
 	},
 
 	/**

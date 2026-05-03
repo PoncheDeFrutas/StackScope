@@ -1,3 +1,6 @@
+import type { MemoryViewConfig } from '../config/MemoryViewConfig.js';
+import { DEFAULT_CONFIG } from '../config/MemoryViewConfig.js';
+
 /**
  * Immutable representation of a memory view document.
  * Pure domain model — no VS Code imports.
@@ -7,6 +10,8 @@ export interface MemoryDocument {
 	readonly id: string;
 	/** The address expression or literal (e.g., "0x20000000" or "&myVar"). */
 	readonly address: string;
+	/** Human-readable label shown in the memory-view selector. */
+	readonly displayName: string;
 	/** Debug session ID this document is bound to. */
 	readonly sessionId: string;
 	/** Resolved memory reference for DAP readMemory (may differ from address). */
@@ -18,6 +23,8 @@ export interface MemoryDocument {
 	 * Literal hex addresses (0x...) are static, everything else is dynamic.
 	 */
 	readonly isDynamic: boolean;
+	/** Per-view rendering configuration. */
+	readonly config: MemoryViewConfig;
 }
 
 /**
@@ -44,15 +51,19 @@ export function createMemoryDocument(
 	address: string,
 	sessionId: string,
 	memoryReference: string,
-	hasResolvedReference = true
+	hasResolvedReference = true,
+	config: MemoryViewConfig = DEFAULT_CONFIG,
+	displayName = address
 ): MemoryDocument {
 	const isDynamic = !isLiteralAddress(address);
 	return Object.freeze({
 		id,
 		address,
+		displayName,
 		sessionId,
 		memoryReference,
 		hasResolvedReference,
 		isDynamic,
+		config,
 	});
 }

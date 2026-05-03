@@ -1,4 +1,5 @@
 import type { MemoryDocument } from './MemoryDocument.js';
+import type { MemoryViewConfig } from '../config/MemoryViewConfig.js';
 
 /**
  * Registry for active memory documents.
@@ -27,6 +28,27 @@ export class DocumentRegistry {
 			...doc,
 			memoryReference,
 			hasResolvedReference: true,
+		});
+		this.documents.set(id, updated);
+		return updated;
+	}
+
+	/**
+	 * Updates user-visible document metadata.
+	 */
+	updateMetadata(
+		id: string,
+		updates: { address?: string; displayName?: string; config?: MemoryViewConfig }
+	): MemoryDocument | null {
+		const doc = this.documents.get(id);
+		if (!doc) {
+			return null;
+		}
+		const updated: MemoryDocument = Object.freeze({
+			...doc,
+			address: updates.address ?? doc.address,
+			displayName: updates.displayName ?? doc.displayName,
+			config: updates.config ?? doc.config,
 		});
 		this.documents.set(id, updated);
 		return updated;

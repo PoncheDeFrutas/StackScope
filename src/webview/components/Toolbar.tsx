@@ -1,19 +1,26 @@
 import { useState, useEffect, useCallback, type FormEvent, type KeyboardEvent, type CSSProperties } from 'react';
-import type { PresetSnapshot } from '../../protocol/methods.js';
+import type { DocumentSnapshot, PresetSnapshot } from '../../protocol/methods.js';
 
 interface ToolbarProps {
 	sessionStatus: 'none' | 'running' | 'stopped';
+	documents: DocumentSnapshot[];
+	activeDocumentId: string | null;
 	presets: PresetSnapshot[];
 	selectedPresetId: string | null;
 	onOpenDocument: (target: string) => void;
+	onSelectDocument: (id: string) => void;
+	onCloseDocument: (id: string) => void;
 	onSelectPreset: (preset: PresetSnapshot | null) => void;
 	onSavePreset: (name: string, target: string) => void;
 	onDeletePreset: (id: string) => void;
 	onRefresh: () => void;
+	onCopySelection: () => void;
+	onCopyLoaded: () => void;
 	onToggleSettings: () => void;
 	isLoading: boolean;
 	showSettings: boolean;
 	currentTarget: string;
+	selectedByteCount: number;
 }
 
 /**
@@ -21,17 +28,24 @@ interface ToolbarProps {
  */
 export function Toolbar({
 	sessionStatus,
+	documents,
+	activeDocumentId,
 	presets,
 	selectedPresetId,
 	onOpenDocument,
+	onSelectDocument,
+	onCloseDocument,
 	onSelectPreset,
 	onSavePreset,
 	onDeletePreset,
 	onRefresh,
+	onCopySelection,
+	onCopyLoaded,
 	onToggleSettings,
 	isLoading,
 	showSettings,
 	currentTarget,
+	selectedByteCount,
 }: ToolbarProps): JSX.Element {
 	const [target, setTarget] = useState('');
 	const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -111,9 +125,45 @@ export function Toolbar({
 
 	const selectedPreset = presets.find((p) => p.id === selectedPresetId);
 	const canDelete = selectedPreset && !selectedPreset.isBuiltin;
+	const canCloseDocument = activeDocumentId !== null && documents.length > 0;
 
 	return (
 		<div style={styles.container}>
+			<div style={styles.documentSection}>
+				<select
+					value={activeDocumentId ?? ''}
+					onChange={(e) => {
+						if (e.target.value) {
+							onSelectDocument(e.target.value);
+						}
+					}}
+					style={styles.documentSelect}
+					disabled={documents.length === 0}
+					title="Open memory views"
+				>
+					{documents.length === 0 ? (
+						<option value="">No views</option>
+					) : (
+						documents.map((doc) => (
+							<option key={doc.id} value={doc.id}>
+								{doc.displayName || doc.address}
+							</option>
+						))
+					)}
+				</select>
+				<button
+					onClick={() => {
+						if (activeDocumentId) {
+							onCloseDocument(activeDocumentId);
+						}
+					}}
+					style={styles.smallIconButton}
+					title="Close memory view"
+					disabled={!canCloseDocument}
+				>
+					<CloseIcon />
+				</button>
+			</div>
 			{/* Preset selector */}
 			<div style={styles.presetSection}>
 				<select
@@ -195,6 +245,22 @@ export function Toolbar({
 					title="Save as preset"
 				>
 					<SaveIcon />
+				</button>
+				<button
+					onClick={onCopySelection}
+					disabled={selectedByteCount === 0}
+					style={styles.smallIconButton}
+					title={selectedByteCount > 0 ? `Copy ${selectedByteCount} selected bytes` : 'Copy selected bytes'}
+				>
+					<CopyIcon />
+				</button>
+				<button
+					onClick={onCopyLoaded}
+					disabled={documents.length === 0}
+					style={styles.smallIconButton}
+					title="Copy loaded bytes"
+				>
+					<CopyAllIcon />
 				</button>
 				<button
 					onClick={onToggleSettings}
@@ -298,6 +364,30 @@ function TrashIcon(): JSX.Element {
 	);
 }
 
+function CloseIcon(): JSX.Element {
+	return (
+		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+			<path d="M4.2 3.5L8 7.3l3.8-3.8.7.7L8.7 8l3.8 3.8-.7.7L8 8.7l-3.8 3.8-.7-.7L7.3 8 3.5 4.2l.7-.7z" />
+		</svg>
+	);
+}
+
+function CopyIcon(): JSX.Element {
+	return (
+		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+			<path d="M4 4V1.5l.5-.5h8l.5.5v10l-.5.5H10v2.5l-.5.5h-8l-.5-.5v-10l.5-.5H4zm1 0h4.5l.5.5V11h2V2H5v2zM2 5v9h7V5H2z" />
+		</svg>
+	);
+}
+
+function CopyAllIcon(): JSX.Element {
+	return (
+		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+			<path d="M2 2h9v2h2v10H4v-2H2V2zm3 3v8h7V5H5zm5-1V3H3v8h1V4h6z" />
+		</svg>
+	);
+}
+
 const styles: Record<string, CSSProperties> = {
 	container: {
 		display: 'flex',
@@ -313,6 +403,20 @@ const styles: Record<string, CSSProperties> = {
 		display: 'flex',
 		alignItems: 'center',
 		gap: '2px',
+	},
+	documentSection: {
+		display: 'flex',
+		alignItems: 'center',
+		gap: '2px',
+	},
+	documentSelect: {
+		padding: '4px 8px',
+		border: '1px solid var(--vscode-input-border)',
+		backgroundColor: 'var(--vscode-input-background)',
+		color: 'var(--vscode-input-foreground)',
+		fontSize: '13px',
+		minWidth: '140px',
+		maxWidth: '220px',
 	},
 	presetSelect: {
 		padding: '4px 8px',
