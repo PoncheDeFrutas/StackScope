@@ -14,11 +14,11 @@ VS Code extension for debugger-backed memory inspection.
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![GitHub Repo stars](https://img.shields.io/github/stars/PoncheDeFrutas/StackScope?style=social)
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PoncheDeFrutas.StackScope)
-![Wakatime](https://wakatime.com/badge/github/PoncheDeFrutas/StackScope.svg)
+[![wakatime](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27.svg)](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27)
 
 ## Repository Metrics / Analytics
 
-![Repobeats](https://repobeats.axiom.co/api/embed/8fda4b2d09a8bdc3777e9a6ea2c64c945a85f3e7.svg "Repobeats analytics")
+![Repobeats](https://repobeats.axiom.co/api/embed/18b83e6284c2b80d767b8d9ce1c372ba2c90fdc1.svg "Repobeats analytics image")
 
 ## Overview
 
