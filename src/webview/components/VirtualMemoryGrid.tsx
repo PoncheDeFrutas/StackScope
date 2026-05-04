@@ -799,7 +799,6 @@ const variantStyles: Record<CellVariant, CSSProperties> = {
 	},
 	decoded: {
 		color: 'var(--vscode-debugTokenExpression-string)',
-		backgroundColor: 'var(--vscode-editor-inactiveSelectionBackground)',
 	},
 	loading: {
 		color: 'var(--vscode-disabledForeground)',
