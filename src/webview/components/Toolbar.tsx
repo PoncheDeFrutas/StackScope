@@ -149,16 +149,14 @@ export function Toolbar({
 				>
 					<SaveIcon />
 				</button>
-				{canDelete && (
-					<button
-						onClick={handleDeleteSelectedPreset}
-						style={styles.smallIconButton}
-						title="Delete preset"
-						disabled={isDisabled}
-					>
-						<TrashIcon />
-					</button>
-				)}
+				<button
+					onClick={handleDeleteSelectedPreset}
+					style={styles.smallIconButton}
+					title={canDelete ? 'Delete preset' : 'Select a saved preset to delete'}
+					disabled={!canDelete || isDisabled}
+				>
+					<TrashIcon />
+				</button>
 			</div>
 
 			{/* Address input */}
