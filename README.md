@@ -1,11 +1,9 @@
 # StackScope
 VS Code extension for debugger-backed memory inspection.
 
-<!--
 <p align="center">
-  <img src="docs/assets/logo.svg" width="160" alt="StackScope logo" />
+  <img src="docs/assets/stackscope.png" width="160" alt="StackScope logo" />
 </p>
--->
 
 ![Version](https://img.shields.io/badge/version-0.1.2-blue)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.110.0-007ACC)
