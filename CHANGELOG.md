@@ -6,6 +6,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-04
+
 ### Added
 
 - Structured project documentation under `docs/` with focused pages.
