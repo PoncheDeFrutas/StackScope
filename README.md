@@ -1,5 +1,5 @@
 # StackScope
-Extensión VS Code para inspección de memoria en depuración.
+VS Code extension for debugger-backed memory inspection.
 
 <!--
 <p align="center">
@@ -14,27 +14,27 @@ Extensión VS Code para inspección de memoria en depuración.
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![GitHub Repo stars](https://img.shields.io/github/stars/PoncheDeFrutas/StackScope?style=social)
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PoncheDeFrutas.StackScope)
-[![wakatime](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27.svg)](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27)
+![Wakatime](https://wakatime.com/badge/github/PoncheDeFrutas/StackScope.svg)
 
 ## Repository Metrics / Analytics
 
-![Repobeats](https://repobeats.axiom.co/api/embed/18b83e6284c2b80d767b8d9ce1c372ba2c90fdc1.svg "Repobeats analytics image")
+![Repobeats](https://repobeats.axiom.co/api/embed/8fda4b2d09a8bdc3777e9a6ea2c64c945a85f3e7.svg "Repobeats analytics")
 
 ## Overview
 
-StackScope es una extensión de VS Code para inspección de memoria durante sesiones de depuración. Usa DAP para leer memoria y resolver expresiones/direcciones/registros, y muestra una grilla virtualizada con columnas hex/decoded. Está pensada para flujos low-level: stack debugging, análisis de bytes cambiantes y navegación entre memoria y contexto de ejecución.
+StackScope is a VS Code extension for memory inspection during debug sessions. It uses DAP to read memory and resolve expressions/addresses/registers, and renders a virtualized grid with hex/decoded columns. Built for low-level workflows like stack debugging, byte-change tracking, and navigation between memory and execution context.
 
 ## Features
 
-- Lectura de memoria vía DAP `readMemory`.
-- Grilla virtualizada con columnas hex/decoded.
-- Presets persistentes por workspace (guardar/eliminar).
-- Botones rápidos para `$pc`, `$sp`, `$lr`.
-- Panel de registros read-only.
-- Register sets configurables.
-- Navegación de call stack y disassembly en editor-tab.
-- Resaltado de bytes cambiados entre ejecuciones.
-- Persistencia de estado de vista por workspace.
+- Memory reads via DAP `readMemory`.
+- Virtualized grid with hex/decoded columns.
+- Workspace-persisted presets (save/delete).
+- Quick targets for `$pc`, `$sp`, `$lr`.
+- Read-only register panel.
+- Configurable register sets.
+- Call stack/disassembly navigation in editor-tab.
+- Changed-byte highlighting across runs.
+- Workspace-scoped view state persistence.
 
 ## Tech Stack
 
@@ -46,20 +46,20 @@ StackScope es una extensión de VS Code para inspección de memoria durante sesi
 
 ## Getting Started
 
-Requisitos:
+Requirements:
 
 - VS Code `^1.110.0`
-- Sesión de debug activa
-- Adapter con soporte para `readMemory` y `evaluate`
+- Active debug session
+- Adapter support for `readMemory` and `evaluate`
 
-Uso básico:
+Basic flow:
 
-1. Inicia depuración y pausa ejecución.
-2. Abre `StackScope: Open Memory View`.
-3. Ingresa un target (ej: `0x20000000`, `$sp`, `&myVar`) y presiona `Go`.
-4. Ajusta columnas, unit size, formatos y total size desde Settings.
-5. Usa el panel de registros y selector de register sets.
-6. Abre `StackScope: Open Call Stack (Editor Tab)` para navegar frames y disassembly.
+1. Start debugging and pause execution.
+2. Open `StackScope: Open Memory View`.
+3. Enter target (e.g. `0x20000000`, `$sp`, `&myVar`) and press `Go`.
+4. Adjust columns, unit size, formats, and total size in Settings.
+5. Use register panel and register set selector.
+6. Open `StackScope: Open Call Stack (Editor Tab)` to navigate frames and disassembly.
 
 ## Development Workflow
 
@@ -68,24 +68,24 @@ pnpm install
 pnpm run compile
 ```
 
-Para depurar extensión localmente, usa la configuración `Run Extension` en `.vscode/launch.json`.
+For local debugging, use `Run Extension` in `.vscode/launch.json`.
 
 ## Available Scripts
 
 | Script | Description |
 | --- | --- |
 | `pnpm run compile` | Type-check + lint + bundle (`esbuild.js`) |
-| `pnpm run package` | Build producción (`--production`) |
-| `pnpm run watch` | Watch paralelo (tsc + esbuild) |
-| `pnpm run watch:tsc` | Watch TypeScript sin emitir |
-| `pnpm run watch:esbuild` | Watch bundle esbuild |
+| `pnpm run package` | Production build (`--production`) |
+| `pnpm run watch` | Parallel watch (tsc + esbuild) |
+| `pnpm run watch:tsc` | Watch TypeScript without emit |
+| `pnpm run watch:esbuild` | Watch esbuild bundle |
 | `pnpm run check-types` | `tsc --noEmit` |
 | `pnpm run lint` | `eslint src` |
 | `pnpm run test` | VS Code extension tests |
-| `pnpm run compile-tests` | Compila tests a `out/` |
-| `pnpm run watch-tests` | Watch tests a `out/` |
-| `pnpm run vsix` | Empaqueta `.vsix` |
-| `pnpm run vsix:publish` | Publica `.vsix` |
+| `pnpm run compile-tests` | Compile tests to `out/` |
+| `pnpm run watch-tests` | Watch tests to `out/` |
+| `pnpm run vsix` | Package `.vsix` |
+| `pnpm run vsix:publish` | Publish `.vsix` |
 
 ## Project Structure
 
@@ -127,14 +127,14 @@ Para depurar extensión localmente, usa la configuración `Run Extension` en `.v
 
 ## Contributing
 
-Lee `docs/contributing.md` y `docs/development.md` antes de proponer cambios.
+Read `docs/contributing.md` and `docs/development.md` before proposing changes.
 
 ## License
 
-MIT License. Ver `LICENSE`.
+MIT License. See `LICENSE`.
 
 ## Documentation Update / Changelog
 
-- README reestructurado y expandido con overview, features reales, stack, scripts y estructura.
-- Badges y analytics actualizados para repo `PoncheDeFrutas/StackScope`.
-- Links de documentación alineados con `docs/`.
+- README restructured and expanded with overview, real features, stack, scripts, and structure.
+- Badges and analytics updated for repo `PoncheDeFrutas/StackScope`.
+- Documentation links aligned with `docs/`.
