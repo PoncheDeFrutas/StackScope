@@ -1,15 +1,12 @@
 import { useState, useEffect, useCallback, type FormEvent, type KeyboardEvent, type CSSProperties } from 'react';
-import type { DocumentSnapshot, PresetSnapshot } from '../../protocol/methods.js';
+import type { PresetSnapshot } from '../../protocol/methods.js';
+import { isQuickRegisterTarget } from '../../domain/presets/MemoryPreset.js';
 
 interface ToolbarProps {
 	sessionStatus: 'none' | 'running' | 'stopped';
-	documents: DocumentSnapshot[];
-	activeDocumentId: string | null;
 	presets: PresetSnapshot[];
 	selectedPresetId: string | null;
 	onOpenDocument: (target: string) => void;
-	onSelectDocument: (id: string) => void;
-	onCloseDocument: (id: string) => void;
 	onSelectPreset: (preset: PresetSnapshot | null) => void;
 	onSavePreset: (name: string, target: string) => void;
 	onDeletePreset: (id: string) => void;
@@ -20,6 +17,7 @@ interface ToolbarProps {
 	isLoading: boolean;
 	showSettings: boolean;
 	currentTarget: string;
+	hasActiveDocument: boolean;
 	selectedByteCount: number;
 }
 
@@ -28,13 +26,9 @@ interface ToolbarProps {
  */
 export function Toolbar({
 	sessionStatus,
-	documents,
-	activeDocumentId,
 	presets,
 	selectedPresetId,
 	onOpenDocument,
-	onSelectDocument,
-	onCloseDocument,
 	onSelectPreset,
 	onSavePreset,
 	onDeletePreset,
@@ -45,6 +39,7 @@ export function Toolbar({
 	isLoading,
 	showSettings,
 	currentTarget,
+	hasActiveDocument,
 	selectedByteCount,
 }: ToolbarProps): JSX.Element {
 	const [target, setTarget] = useState('');
@@ -109,7 +104,7 @@ export function Toolbar({
 
 	const handleSavePreset = useCallback(() => {
 		const name = presetName.trim();
-		if (name && currentTarget) {
+		if (name && currentTarget && !isQuickRegisterTarget(currentTarget)) {
 			onSavePreset(name, currentTarget);
 			setShowSaveDialog(false);
 			setPresetName('');
@@ -125,46 +120,10 @@ export function Toolbar({
 
 	const selectedPreset = presets.find((p) => p.id === selectedPresetId);
 	const canDelete = selectedPreset && !selectedPreset.isBuiltin;
-	const canCloseDocument = activeDocumentId !== null && documents.length > 0;
+	const canSavePreset = Boolean(currentTarget) && !isQuickRegisterTarget(currentTarget);
 
 	return (
 		<div style={styles.container}>
-			<div style={styles.documentSection}>
-				<select
-					value={activeDocumentId ?? ''}
-					onChange={(e) => {
-						if (e.target.value) {
-							onSelectDocument(e.target.value);
-						}
-					}}
-					style={styles.documentSelect}
-					disabled={documents.length === 0}
-					title="Open memory views"
-				>
-					{documents.length === 0 ? (
-						<option value="">No views</option>
-					) : (
-						documents.map((doc) => (
-							<option key={doc.id} value={doc.id}>
-								{doc.displayName || doc.address}
-							</option>
-						))
-					)}
-				</select>
-				<button
-					onClick={() => {
-						if (activeDocumentId) {
-							onCloseDocument(activeDocumentId);
-						}
-					}}
-					style={styles.smallIconButton}
-					title="Close memory view"
-					disabled={!canCloseDocument}
-				>
-					<CloseIcon />
-				</button>
-			</div>
-			{/* Preset selector */}
 			<div style={styles.presetSection}>
 				<select
 					value={selectedPresetId || ''}
@@ -173,13 +132,23 @@ export function Toolbar({
 					disabled={isDisabled}
 					title="Select preset"
 				>
-					<option value="">Custom...</option>
+					<option value="" disabled hidden>
+						Saved
+					</option>
 					{presets.map((preset) => (
 						<option key={preset.id} value={preset.id}>
 							{preset.name}
 						</option>
 					))}
 				</select>
+				<button
+					onClick={() => setShowSaveDialog(true)}
+					disabled={!canSavePreset || isDisabled}
+					style={styles.smallIconButton}
+					title={canSavePreset ? 'Save as preset' : 'Use PC, SP, or LR quick button instead'}
+				>
+					<SaveIcon />
+				</button>
 				{canDelete && (
 					<button
 						onClick={handleDeleteSelectedPreset}
@@ -239,14 +208,6 @@ export function Toolbar({
 			{/* Actions */}
 			<div style={styles.actions}>
 				<button
-					onClick={() => setShowSaveDialog(true)}
-					disabled={!currentTarget || isDisabled}
-					style={styles.smallIconButton}
-					title="Save as preset"
-				>
-					<SaveIcon />
-				</button>
-				<button
 					onClick={onCopySelection}
 					disabled={selectedByteCount === 0}
 					style={styles.smallIconButton}
@@ -256,7 +217,7 @@ export function Toolbar({
 				</button>
 				<button
 					onClick={onCopyLoaded}
-					disabled={documents.length === 0}
+					disabled={!hasActiveDocument}
 					style={styles.smallIconButton}
 					title="Copy loaded bytes"
 				>
@@ -299,7 +260,11 @@ export function Toolbar({
 								if (e.key === 'Escape') setShowSaveDialog(false);
 							}}
 						/>
-						<button onClick={handleSavePreset} style={styles.button} disabled={!presetName.trim()}>
+						<button
+							onClick={handleSavePreset}
+							style={styles.button}
+							disabled={!presetName.trim() || !canSavePreset}
+						>
 							Save
 						</button>
 						<button onClick={() => setShowSaveDialog(false)} style={styles.cancelButton}>
@@ -364,14 +329,6 @@ function TrashIcon(): JSX.Element {
 	);
 }
 
-function CloseIcon(): JSX.Element {
-	return (
-		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-			<path d="M4.2 3.5L8 7.3l3.8-3.8.7.7L8.7 8l3.8 3.8-.7.7L8 8.7l-3.8 3.8-.7-.7L7.3 8 3.5 4.2l.7-.7z" />
-		</svg>
-	);
-}
-
 function CopyIcon(): JSX.Element {
 	return (
 		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -404,27 +361,14 @@ const styles: Record<string, CSSProperties> = {
 		alignItems: 'center',
 		gap: '2px',
 	},
-	documentSection: {
-		display: 'flex',
-		alignItems: 'center',
-		gap: '2px',
-	},
-	documentSelect: {
-		padding: '4px 8px',
-		border: '1px solid var(--vscode-input-border)',
-		backgroundColor: 'var(--vscode-input-background)',
-		color: 'var(--vscode-input-foreground)',
-		fontSize: '13px',
-		minWidth: '140px',
-		maxWidth: '220px',
-	},
 	presetSelect: {
 		padding: '4px 8px',
 		border: '1px solid var(--vscode-input-border)',
 		backgroundColor: 'var(--vscode-input-background)',
 		color: 'var(--vscode-input-foreground)',
 		fontSize: '13px',
-		minWidth: '100px',
+		minWidth: '140px',
+		maxWidth: '240px',
 	},
 	form: {
 		display: 'flex',

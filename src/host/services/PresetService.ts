@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import type { MemoryPreset } from '../../domain/presets/MemoryPreset.js';
-import { createMemoryPreset, BUILTIN_PRESETS, isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
+import {
+	createMemoryPreset,
+	BUILTIN_PRESETS,
+	isBuiltinPreset,
+	isQuickRegisterTarget,
+} from '../../domain/presets/MemoryPreset.js';
 
 const STORAGE_KEY = 'stackscope.presets';
 
@@ -52,10 +57,15 @@ export class PresetService {
 	 * Saves a new user preset.
 	 */
 	save(name: string, target: string, description?: string): MemoryPreset {
+		const existing = this.findUserPresetByNameTarget(name, target);
+		if (existing) {
+			return existing;
+		}
+
 		const preset = createMemoryPreset(
 			generatePresetId(),
-			name,
-			target,
+			name.trim(),
+			target.trim(),
 			description
 		);
 
@@ -116,11 +126,44 @@ export class PresetService {
 	private loadFromStorage(): void {
 		const stored = this.context.workspaceState.get<MemoryPreset[]>(STORAGE_KEY);
 		if (Array.isArray(stored)) {
-			this.userPresets = stored.filter((p) => !isBuiltinPreset(p));
+			this.userPresets = dedupeUserPresets(
+				stored.filter((p) => !isBuiltinPreset(p) && !isQuickRegisterTarget(p.target))
+			);
 		}
 	}
 
 	private saveToStorage(): void {
 		this.context.workspaceState.update(STORAGE_KEY, this.userPresets);
 	}
+
+	private findUserPresetByNameTarget(name: string, target: string): MemoryPreset | undefined {
+		const key = getPresetIdentityKey(name, target);
+		return this.userPresets.find((preset) =>
+			getPresetIdentityKey(preset.name, preset.target) === key
+		);
+	}
+}
+
+function dedupeUserPresets(presets: MemoryPreset[]): MemoryPreset[] {
+	const seen = new Set<string>();
+	const deduped: MemoryPreset[] = [];
+
+	for (const preset of presets) {
+		const key = getPresetIdentityKey(preset.name, preset.target);
+		if (seen.has(key)) {
+			continue;
+		}
+		seen.add(key);
+		deduped.push(preset);
+	}
+
+	return deduped;
+}
+
+function getPresetIdentityKey(name: string, target: string): string {
+	return `${normalizePresetPart(name)}\u0000${normalizePresetPart(target)}`;
+}
+
+function normalizePresetPart(value: string): string {
+	return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }

@@ -34,4 +34,23 @@ suite('DocumentRegistry', () => {
 		assert.deepStrictEqual(updated?.config, config);
 		assert.strictEqual(updated?.memoryReference, '0x2000');
 	});
+
+	test('finds existing document by session and normalized target', () => {
+		const registry = new DocumentRegistry();
+		const doc = createMemoryDocument('doc-1', '  $sp  ', 'session-1', '0x2000');
+
+		registry.add(doc);
+
+		assert.strictEqual(registry.findBySessionTarget('session-1', '$sp')?.id, doc.id);
+		assert.strictEqual(registry.findBySessionTarget('session-2', '$sp'), undefined);
+	});
+
+	test('treats repeated internal whitespace as same target', () => {
+		const registry = new DocumentRegistry();
+		const doc = createMemoryDocument('doc-1', '&(myVar)', 'session-1', '0x2000');
+
+		registry.add(doc);
+
+		assert.strictEqual(registry.findBySessionTarget('session-1', '  &(myVar)  ')?.id, doc.id);
+	});
 });

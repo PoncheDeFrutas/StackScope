@@ -42,7 +42,6 @@ const VIEW_STATE_SAVE_DEBOUNCE_MS = 200;
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
 	const [config, setConfig] = useState<MemoryViewConfig>(DEFAULT_CONFIG);
-	const [documents, setDocuments] = useState<DocumentSnapshot[]>([]);
 	const [presets, setPresets] = useState<PresetSnapshot[]>([]);
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 	const [showSettings, setShowSettings] = useState(false);
@@ -134,7 +133,6 @@ export function App(): JSX.Element {
 
 		// Subscribe to document changes
 		const unsubDoc = messageBus.on('documentChanged', (payload) => {
-			setDocuments(payload.documents);
 			setState((prev) => {
 				if (!payload.document) {
 					baselineRef.current = new Map();
@@ -234,6 +232,12 @@ export function App(): JSX.Element {
 		registerValueFormat,
 	]);
 
+	useEffect(() => {
+		if (selectedPresetId && !presets.some((preset) => preset.id === selectedPresetId)) {
+			setSelectedPresetId(null);
+		}
+	}, [presets, selectedPresetId]);
+
 	// Handle pending refresh when stopped
 	useEffect(() => {
 		if (pendingRefreshRef.current && state.phase === 'ready' && state.session.status === 'stopped') {
@@ -277,7 +281,6 @@ export function App(): JSX.Element {
 			const restoredConfig = result.activeDocument?.config ?? restoredViewState?.config ?? DEFAULT_CONFIG;
 			const restoredTarget = result.activeDocument?.address ?? restoredViewState?.currentTarget ?? '';
 
-			setDocuments(result.documents);
 			// Store presets from init
 			setPresets(result.presets);
 
@@ -394,10 +397,14 @@ export function App(): JSX.Element {
 				displayName: options?.displayName ?? target,
 				config: options?.config ?? config,
 			});
-			setDocuments(result.documents);
+			setConfig(result.document.config);
 
 			// Reset paged memory for new document
-			pagedMemory.reset(result.document.id, result.document.address, config.totalSize);
+			pagedMemory.reset(
+				result.document.id,
+				result.document.address,
+				result.document.config.totalSize
+			);
 
 			// Clear change tracking
 			baselineRef.current = new Map();
@@ -429,74 +436,6 @@ export function App(): JSX.Element {
 			return false;
 		}
 	}, [config, pagedMemory]);
-
-	const handleSelectDocument = useCallback(async (id: string) => {
-		try {
-			const result = await HostClient.selectDocument(id);
-			setDocuments(result.documents);
-			setConfig(result.document.config);
-			setCurrentTarget(result.document.address);
-			setSelectedPresetId(null);
-			pagedMemory.reset(result.document.id, result.document.address, result.document.config.totalSize);
-			baselineRef.current = new Map();
-			setChangedBytes(new Map());
-			setMemorySelection(null);
-			setState((prev) => {
-				if ('session' in prev) {
-					return {
-						phase: 'ready',
-						session: prev.session,
-						document: result.document,
-					};
-				}
-				return prev;
-			});
-		} catch (err) {
-			console.error('Failed to select document:', err);
-		}
-	}, [pagedMemory]);
-
-	const handleCloseDocument = useCallback(async (id: string) => {
-		try {
-			const result = await HostClient.closeDocument(id);
-			setDocuments(result.documents);
-			baselineRef.current = new Map();
-			setChangedBytes(new Map());
-			setMemorySelection(null);
-			if (result.activeDocument) {
-				const nextDocument = result.activeDocument;
-				setConfig(nextDocument.config);
-				setCurrentTarget(nextDocument.address);
-				pagedMemory.reset(
-					nextDocument.id,
-					nextDocument.address,
-					nextDocument.config.totalSize
-				);
-				setState((prev) => {
-					if ('session' in prev) {
-						return {
-							phase: 'ready',
-							session: prev.session,
-							document: nextDocument,
-						};
-					}
-					return prev;
-				});
-				return;
-			}
-
-			pagedMemory.reset('', '0x0', 0);
-			setCurrentTarget('');
-			setState((prev) => {
-				if ('session' in prev) {
-					return { phase: 'no-document', session: prev.session };
-				}
-				return prev;
-			});
-		} catch (err) {
-			console.error('Failed to close document:', err);
-		}
-	}, [pagedMemory]);
 
 	const handleCopySelection = useCallback(() => {
 		if (!memorySelection) {
@@ -561,9 +500,12 @@ export function App(): JSX.Element {
 
 	const handleSelectPreset = useCallback((preset: PresetSnapshot | null) => {
 		if (preset) {
-			setSelectedPresetId(preset.id);
 			setCurrentTarget(preset.target);
-			handleOpenDocument(preset.target);
+			void handleOpenDocument(preset.target).then((success) => {
+				if (success) {
+					setSelectedPresetId(preset.id);
+				}
+			});
 		} else {
 			setSelectedPresetId(null);
 		}
@@ -572,7 +514,12 @@ export function App(): JSX.Element {
 	const handleSavePreset = useCallback(async (name: string, target: string) => {
 		try {
 			const result = await HostClient.savePreset(name, target);
-			setPresets((prev) => [...prev, result.preset]);
+			setPresets((prev) => {
+				const exists = prev.some((preset) => preset.id === result.preset.id);
+				return exists
+					? prev.map((preset) => preset.id === result.preset.id ? result.preset : preset)
+					: [...prev, result.preset];
+			});
 			setSelectedPresetId(result.preset.id);
 		} catch (err) {
 			console.error('Failed to save preset:', err);
@@ -615,7 +562,6 @@ export function App(): JSX.Element {
 				displayName,
 				config: newConfig,
 			}).then((result) => {
-				setDocuments(result.documents);
 				setState((prev) => {
 					if (prev.phase === 'ready' && prev.document.id === result.document.id) {
 						return { ...prev, document: result.document };
@@ -789,13 +735,9 @@ export function App(): JSX.Element {
 		<div style={styles.container}>
 			<Toolbar
 				sessionStatus={sessionStatus}
-				documents={documents}
-				activeDocumentId={activeDocument?.id ?? null}
 				presets={presets}
 				selectedPresetId={selectedPresetId}
 				onOpenDocument={handleOpenDocument}
-				onSelectDocument={handleSelectDocument}
-				onCloseDocument={handleCloseDocument}
 				onSelectPreset={handleSelectPreset}
 				onSavePreset={handleSavePreset}
 				onDeletePreset={handleDeletePreset}
@@ -806,6 +748,7 @@ export function App(): JSX.Element {
 				isLoading={isLoading}
 				showSettings={showSettings}
 				currentTarget={currentTarget}
+				hasActiveDocument={activeDocument !== null}
 				selectedByteCount={selectedByteCount}
 			/>
 			{showSettings && (

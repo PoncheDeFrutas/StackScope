@@ -71,10 +71,10 @@ Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNav
 ## Toolbar behavior (`src/webview/components/Toolbar.tsx`)
 
 - Address/target input is disabled unless status is `stopped` and not loading.
-- `Go` opens document via `onOpenDocument`.
-- Preset selector loads selected preset target.
-- Quick buttons open `$pc`, `$sp`, `$lr`.
-- Includes save/delete preset controls.
+- `Go` opens a temporary memory document via `onOpenDocument`; it does not persist a saved entry.
+- Saved selector loads selected preset target.
+- Quick buttons open `$pc`, `$sp`, `$lr`; those quick targets are not shown in the saved selector.
+- Includes adjacent save/delete controls for saved preset entries.
 - Includes settings toggle and manual refresh action.
 
 ## Register panel behavior (`src/webview/components/RegisterPanel.tsx`)

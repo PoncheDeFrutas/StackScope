@@ -235,6 +235,21 @@ export class HostMessageRouter {
 				);
 			}
 
+			const existingDoc = this.documentRegistry.findBySessionTarget(state.sessionId, target);
+			if (existingDoc) {
+				this.documentRegistry.setActive(existingDoc.id);
+				const snapshot = this.toDocumentSnapshot(existingDoc);
+				this.sendEvent('documentChanged', {
+					document: snapshot,
+					documents: this.getDocumentSnapshots(),
+				});
+
+				return {
+					document: snapshot,
+					documents: this.getDocumentSnapshots(),
+				};
+			}
+
 			const memoryReference = await this.debugGateway.evaluateForMemoryReference(
 				state.sessionId,
 				target,

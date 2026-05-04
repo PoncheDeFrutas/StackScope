@@ -72,6 +72,17 @@ export class DocumentRegistry {
 	}
 
 	/**
+	 * Finds an existing document for a session and target expression.
+	 */
+	findBySessionTarget(sessionId: string, target: string): MemoryDocument | undefined {
+		const normalizedTarget = normalizeDocumentTarget(target);
+		return this.getAll().find((doc) =>
+			doc.sessionId === sessionId &&
+			normalizeDocumentTarget(doc.address) === normalizedTarget
+		);
+	}
+
+	/**
 	 * Sets the active document.
 	 */
 	setActive(id: string | null): void {
@@ -116,4 +127,8 @@ export class DocumentRegistry {
 		this.documents.clear();
 		this.activeDocumentId = null;
 	}
+}
+
+export function normalizeDocumentTarget(target: string): string {
+	return target.trim().replace(/\s+/g, ' ');
 }

@@ -33,18 +33,24 @@ export function createMemoryPreset(
 	});
 }
 
+export const QUICK_REGISTER_TARGETS = new Set(['$pc', '$sp', '$lr']);
+
 /**
- * Built-in register presets.
+ * Built-in presets are intentionally empty because quick register targets use toolbar buttons.
  */
-export const BUILTIN_PRESETS: readonly MemoryPreset[] = Object.freeze([
-	createMemoryPreset('builtin-pc', 'PC (Program Counter)', '$pc', 'Current instruction pointer'),
-	createMemoryPreset('builtin-sp', 'SP (Stack Pointer)', '$sp', 'Top of the stack'),
-	createMemoryPreset('builtin-lr', 'LR (Link Register)', '$lr', 'Return address'),
-]);
+export const BUILTIN_PRESETS: readonly MemoryPreset[] = Object.freeze([]);
 
 /**
  * Checks if a preset is a built-in preset.
  */
 export function isBuiltinPreset(preset: MemoryPreset): boolean {
 	return preset.id.startsWith('builtin-');
+}
+
+export function isQuickRegisterTarget(target: string): boolean {
+	return QUICK_REGISTER_TARGETS.has(normalizePresetTarget(target));
+}
+
+function normalizePresetTarget(target: string): string {
+	return target.trim().replace(/\s+/g, ' ').toLowerCase();
 }
