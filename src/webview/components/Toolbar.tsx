@@ -104,12 +104,13 @@ export function Toolbar({
 
 	const handleSavePreset = useCallback(() => {
 		const name = presetName.trim();
-		if (name && currentTarget && !isQuickRegisterTarget(currentTarget)) {
-			onSavePreset(name, currentTarget);
+		const savedTarget = target.trim();
+		if (name && savedTarget && !isQuickRegisterTarget(savedTarget)) {
+			onSavePreset(name, savedTarget);
 			setShowSaveDialog(false);
 			setPresetName('');
 		}
-	}, [presetName, currentTarget, onSavePreset]);
+	}, [presetName, target, onSavePreset]);
 
 	const handleDeleteSelectedPreset = useCallback(() => {
 		const selected = presets.find((p) => p.id === selectedPresetId);
@@ -120,7 +121,13 @@ export function Toolbar({
 
 	const selectedPreset = presets.find((p) => p.id === selectedPresetId);
 	const canDelete = selectedPreset && !selectedPreset.isBuiltin;
-	const canSavePreset = Boolean(currentTarget) && !isQuickRegisterTarget(currentTarget);
+	const trimmedTarget = target.trim();
+	const canSavePreset = Boolean(trimmedTarget) && !isQuickRegisterTarget(trimmedTarget);
+	const savePresetTitle = !trimmedTarget
+		? 'Enter an address or expression to save'
+		: canSavePreset
+			? 'Save as preset'
+			: 'Use PC, SP, or LR quick button instead';
 
 	return (
 		<div style={styles.container}>
@@ -145,7 +152,7 @@ export function Toolbar({
 					onClick={() => setShowSaveDialog(true)}
 					disabled={!canSavePreset || isDisabled}
 					style={styles.smallIconButton}
-					title={canSavePreset ? 'Save as preset' : 'Use PC, SP, or LR quick button instead'}
+					title={savePresetTitle}
 				>
 					<SaveIcon />
 				</button>
