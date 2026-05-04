@@ -15,3 +15,4 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Changed
 
 - Root `README.md` now acts as a concise entrypoint to split documentation.
+- Documentation refresh: expanded root README with full overview, features, scripts, structure, and metrics.

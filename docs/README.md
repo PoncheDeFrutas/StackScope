@@ -20,7 +20,7 @@ All pages are written from the current repository implementation.
 | Roadmap and planned enhancements | `docs/roadmap.md` |
 | Known constraints from current code | `docs/known-constraints.md` |
 | Practical contributing notes | `docs/contributing.md` |
-| Project license | `docs/license.md` |
+| Project license | `LICENSE` |
 
 ## Scope
 
