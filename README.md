@@ -14,7 +14,6 @@ Extensión VS Code para inspección de memoria en depuración.
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![GitHub Repo stars](https://img.shields.io/github/stars/PoncheDeFrutas/StackScope?style=social)
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PoncheDeFrutas.StackScope)
-<br>
 [![wakatime](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27.svg)](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27)
 
 ## Repository Metrics / Analytics
