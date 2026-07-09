@@ -46,3 +46,19 @@ export function createProtocolError(
 ): ProtocolError {
 	return { code, message, details };
 }
+
+export function normalizeProtocolError(error: unknown): ProtocolError {
+	if (
+		error &&
+		typeof error === 'object' &&
+		'code' in error &&
+		'message' in error
+	) {
+		return error as ProtocolError;
+	}
+
+	return createProtocolError(
+		ProtocolErrorCode.UNKNOWN_ERROR,
+		error instanceof Error ? error.message : 'Unknown error'
+	);
+}

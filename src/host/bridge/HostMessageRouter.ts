@@ -8,7 +8,11 @@ import type {
 	StackThreadSnapshot,
 } from '../../protocol/methods.js';
 import type { EventName, EventMap } from '../../protocol/events.js';
-import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js';
+import {
+	ProtocolErrorCode,
+	createProtocolError,
+	normalizeProtocolError,
+} from '../../protocol/errors.js';
 import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
@@ -403,13 +407,7 @@ export class HostMessageRouter {
 				result,
 			});
 		} catch (err) {
-			const error =
-				err && typeof err === 'object' && 'code' in err
-					? (err as ReturnType<typeof createProtocolError>)
-					: createProtocolError(
-						ProtocolErrorCode.UNKNOWN_ERROR,
-						err instanceof Error ? err.message : 'Unknown error'
-					);
+			const error = normalizeProtocolError(err);
 
 			this.sendResponse(webview, request.id, {
 				type: 'response',

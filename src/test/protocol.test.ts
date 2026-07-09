@@ -3,6 +3,7 @@ import {
 	ProtocolErrorCode,
 	ProtocolRequestError,
 	createProtocolError,
+	normalizeProtocolError,
 } from '../protocol/errors.js';
 import { isProtocolEvent, isProtocolResponse } from '../protocol/messages.js';
 
@@ -45,5 +46,16 @@ suite('Protocol contracts', () => {
 		assert.strictEqual(error.message, 'Invalid address');
 		assert.strictEqual(error.code, ProtocolErrorCode.INVALID_ADDRESS);
 		assert.deepStrictEqual(error.details, { target: '0xnothex' });
+	});
+
+	test('normalizes unexpected exceptions at protocol boundary', () => {
+		const known = createProtocolError(ProtocolErrorCode.DOCUMENT_NOT_FOUND, 'Missing');
+
+		assert.strictEqual(normalizeProtocolError(known), known);
+		assert.deepStrictEqual(normalizeProtocolError(new Error('Adapter failed')), {
+			code: ProtocolErrorCode.UNKNOWN_ERROR,
+			message: 'Adapter failed',
+			details: undefined,
+		});
 	});
 });
