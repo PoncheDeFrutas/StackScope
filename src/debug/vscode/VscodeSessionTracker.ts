@@ -5,6 +5,7 @@ import type {
 	SessionStatus,
 	SessionStateListener,
 } from '../contracts/SessionTracker.js';
+import { SessionProbeGuard, type SessionProbe } from './SessionProbeGuard.js';
 
 /**
  * VS Code implementation of SessionTracker.
@@ -14,11 +15,13 @@ export class VscodeSessionTracker implements SessionTracker {
 	private state: SessionState = { sessionId: null, status: 'none' };
 	private readonly listeners = new Set<SessionStateListener>();
 	private readonly disposables: vscode.Disposable[] = [];
+	private readonly probeGuard = new SessionProbeGuard();
 
 	constructor() {
 		// Track session start
 		this.disposables.push(
 			vscode.debug.onDidStartDebugSession((session) => {
+				this.probeGuard.invalidate();
 				this.updateState({ sessionId: session.id, status: 'running' });
 			})
 		);
@@ -27,6 +30,7 @@ export class VscodeSessionTracker implements SessionTracker {
 		this.disposables.push(
 			vscode.debug.onDidTerminateDebugSession((session) => {
 				if (this.state.sessionId === session.id) {
+					this.probeGuard.invalidate();
 					this.updateState({ sessionId: null, status: 'none' });
 				}
 			})
@@ -40,8 +44,10 @@ export class VscodeSessionTracker implements SessionTracker {
 					return;
 				}
 				if (event.event === 'stopped') {
+					this.probeGuard.invalidate();
 					this.updateState({ ...this.state, status: 'stopped' });
 				} else if (event.event === 'continued') {
+					this.probeGuard.invalidate();
 					this.updateState({ ...this.state, status: 'running' });
 				}
 			})
@@ -55,6 +61,7 @@ export class VscodeSessionTracker implements SessionTracker {
 				}
 				// Stack item present => stopped, absent => running
 				if (vscode.debug.activeStackItem) {
+					this.probeGuard.invalidate();
 					if (this.state.status === 'stopped') {
 						// Emit again on each stop/frame change so views can refresh dynamic expressions.
 						this.emitState();
@@ -62,6 +69,7 @@ export class VscodeSessionTracker implements SessionTracker {
 						this.updateState({ ...this.state, status: 'stopped' });
 					}
 				} else {
+					this.probeGuard.invalidate();
 					this.updateState({ ...this.state, status: 'running' });
 				}
 			})
@@ -70,6 +78,7 @@ export class VscodeSessionTracker implements SessionTracker {
 		// Also listen to active debug session changes
 		this.disposables.push(
 			vscode.debug.onDidChangeActiveDebugSession((session) => {
+				this.probeGuard.invalidate();
 				if (session) {
 					// When switching sessions, probe actual state
 					this.probeSessionState(session);
@@ -92,13 +101,14 @@ export class VscodeSessionTracker implements SessionTracker {
 	 * Probes the actual state of a debug session by checking threads.
 	 */
 	private async probeSessionState(session: vscode.DebugSession): Promise<void> {
+		const probe = this.probeGuard.begin(session.id);
 		try {
 			// Request threads - if any thread is stopped, session is stopped
 			const response = await session.customRequest('threads');
 			if (response && Array.isArray(response.threads)) {
 				// Check if we have an active stack item (indicates stopped)
 				if (vscode.debug.activeStackItem) {
-					this.updateState({ sessionId: session.id, status: 'stopped' });
+					this.updateProbedState(probe, 'stopped');
 					return;
 				}
 
@@ -111,7 +121,7 @@ export class VscodeSessionTracker implements SessionTracker {
 							levels: 1,
 						});
 						if (stackResponse && stackResponse.stackFrames?.length > 0) {
-							this.updateState({ sessionId: session.id, status: 'stopped' });
+							this.updateProbedState(probe, 'stopped');
 							return;
 						}
 					} catch {
@@ -119,10 +129,10 @@ export class VscodeSessionTracker implements SessionTracker {
 					}
 				}
 			}
-			this.updateState({ sessionId: session.id, status: 'running' });
+			this.updateProbedState(probe, 'running');
 		} catch {
 			// If threads request fails, assume running
-			this.updateState({ sessionId: session.id, status: 'running' });
+			this.updateProbedState(probe, 'running');
 		}
 	}
 
@@ -134,6 +144,7 @@ export class VscodeSessionTracker implements SessionTracker {
 		if (session) {
 			await this.probeSessionState(session);
 		} else if (this.state.sessionId !== null || this.state.status !== 'none') {
+			this.probeGuard.invalidate();
 			this.updateState({ sessionId: null, status: 'none' });
 		}
 		return this.state;
@@ -170,7 +181,14 @@ export class VscodeSessionTracker implements SessionTracker {
 	 */
 	forceStatus(status: SessionStatus): void {
 		if (this.state.sessionId) {
+			this.probeGuard.invalidate();
 			this.updateState({ ...this.state, status });
+		}
+	}
+
+	private updateProbedState(probe: SessionProbe, status: SessionStatus): void {
+		if (this.probeGuard.accepts(probe, vscode.debug.activeDebugSession?.id)) {
+			this.updateState({ sessionId: probe.sessionId, status });
 		}
 	}
 
