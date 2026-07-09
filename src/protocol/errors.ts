@@ -22,6 +22,21 @@ export interface ProtocolError {
 }
 
 /**
+ * Error raised by protocol clients while preserving structured host error data.
+ */
+export class ProtocolRequestError extends Error {
+	readonly code: ProtocolErrorCode;
+	readonly details: unknown;
+
+	constructor(error: ProtocolError) {
+		super(error.message);
+		this.name = 'ProtocolRequestError';
+		this.code = error.code;
+		this.details = error.details;
+	}
+}
+
+/**
  * Creates a typed protocol error.
  */
 export function createProtocolError(

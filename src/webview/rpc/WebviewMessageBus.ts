@@ -1,6 +1,17 @@
-import type { ProtocolRequest, ProtocolResponse, ProtocolEvent } from '../../protocol/messages.js';
+import {
+	isProtocolEvent,
+	isProtocolResponse,
+	type ProtocolRequest,
+	type ProtocolResponse,
+	type ProtocolEvent,
+} from '../../protocol/messages.js';
 import type { MethodName, MethodMap } from '../../protocol/methods.js';
 import type { EventName, EventMap } from '../../protocol/events.js';
+import {
+	ProtocolErrorCode,
+	ProtocolRequestError,
+	createProtocolError,
+} from '../../protocol/errors.js';
 import { generateRequestId } from '../../shared/ids.js';
 
 declare const acquireVsCodeApi: () => {
@@ -24,9 +35,11 @@ export class WebviewMessageBus {
 	private readonly vscode = acquireVsCodeApi();
 	private readonly pendingRequests = new Map<string, PendingRequest<unknown>>();
 	private readonly eventListeners = new Map<string, Set<EventListener<EventName>>>();
+	private readonly messageListener = (event: MessageEvent) => this.handleMessage(event.data);
+	private disposed = false;
 
 	constructor() {
-		window.addEventListener('message', (event) => this.handleMessage(event.data));
+		window.addEventListener('message', this.messageListener);
 	}
 
 	/**
@@ -36,6 +49,11 @@ export class WebviewMessageBus {
 		method: M,
 		params: MethodMap[M]['params']
 	): Promise<MethodMap[M]['result']> {
+		if (this.disposed) {
+			throw new ProtocolRequestError(
+				createProtocolError(ProtocolErrorCode.UNKNOWN_ERROR, 'Webview message bus is disposed')
+			);
+		}
 		const id = generateRequestId();
 
 		const request: ProtocolRequest<M, MethodMap[M]['params']> = {
@@ -66,19 +84,34 @@ export class WebviewMessageBus {
 		}
 		listeners.add(listener as EventListener<EventName>);
 
-		return () => listeners?.delete(listener as EventListener<EventName>);
+		return () => {
+			listeners?.delete(listener as EventListener<EventName>);
+			if (listeners?.size === 0) {
+				this.eventListeners.delete(event);
+			}
+		};
+	}
+
+	dispose(): void {
+		if (this.disposed) {
+			return;
+		}
+		this.disposed = true;
+		window.removeEventListener('message', this.messageListener);
+		const error = new ProtocolRequestError(
+			createProtocolError(ProtocolErrorCode.UNKNOWN_ERROR, 'Webview message bus is disposed')
+		);
+		for (const pending of this.pendingRequests.values()) {
+			pending.reject(error);
+		}
+		this.pendingRequests.clear();
+		this.eventListeners.clear();
 	}
 
 	private handleMessage(msg: unknown): void {
-		if (!msg || typeof msg !== 'object') {
-			return;
-		}
-
-		const typed = msg as { type: string };
-
-		if (typed.type === 'response') {
-			this.handleResponse(msg as ProtocolResponse<unknown>);
-		} else if (typed.type === 'event') {
+		if (isProtocolResponse(msg)) {
+			this.handleResponse(msg);
+		} else if (isProtocolEvent(msg)) {
 			this.handleEvent(msg as ProtocolEvent<EventName, unknown>);
 		}
 	}
@@ -95,7 +128,7 @@ export class WebviewMessageBus {
 		if (response.success) {
 			pending.resolve(response.result);
 		} else {
-			pending.reject(new Error(response.error.message));
+			pending.reject(new ProtocolRequestError(response.error));
 		}
 	}
 
