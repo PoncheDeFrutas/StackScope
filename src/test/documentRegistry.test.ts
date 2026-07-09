@@ -53,4 +53,33 @@ suite('DocumentRegistry', () => {
 
 		assert.strictEqual(registry.findBySessionTarget('session-1', '  &(myVar)  ')?.id, doc.id);
 	});
+
+	test('clears only documents from terminated session and clears active document', () => {
+		const registry = new DocumentRegistry();
+		const terminated = createMemoryDocument('doc-1', '$sp', 'session-1', '0x2000');
+		const current = createMemoryDocument('doc-2', '$pc', 'session-2', '0x1000');
+
+		registry.add(terminated);
+		registry.add(current);
+		registry.setActive(terminated.id);
+		registry.clearSession('session-1');
+
+		assert.strictEqual(registry.get(terminated.id), undefined);
+		assert.strictEqual(registry.get(current.id)?.id, current.id);
+		assert.strictEqual(registry.getActive(), null);
+	});
+
+	test('removing active document does not select another document implicitly', () => {
+		const registry = new DocumentRegistry();
+		const first = createMemoryDocument('doc-1', '$sp', 'session-1', '0x2000');
+		const second = createMemoryDocument('doc-2', '$pc', 'session-1', '0x1000');
+
+		registry.add(first);
+		registry.add(second);
+		registry.setActive(first.id);
+		assert.strictEqual(registry.remove(first.id), true);
+
+		assert.strictEqual(registry.getActive(), null);
+		assert.strictEqual(registry.get(second.id)?.id, second.id);
+	});
 });
