@@ -26,4 +26,17 @@ suite('StackSelectionService', () => {
 			frameId: null,
 		});
 	});
+
+	test('preserves selection when refresh belongs to same session', () => {
+		const service = new StackSelectionService();
+
+		service.set('session-1', 7, 42);
+		service.clearIfSessionChanged('session-1');
+
+		assert.deepStrictEqual(service.get(), {
+			sessionId: 'session-1',
+			threadId: 7,
+			frameId: 42,
+		});
+	});
 });

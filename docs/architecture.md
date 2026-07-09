@@ -21,7 +21,8 @@ flowchart LR
   ROUTER --> PRESETS[PresetService]
   ROUTER --> REGSETS[RegisterSetService]
   ROUTER --> STACKSEL[StackSelectionService]
-  ROUTER --> DOCS[DocumentRegistry]
+  ROUTER --> DOCS[MemoryDocumentService]
+  DOCS --> REGISTRY[DocumentRegistry]
   GATEWAY --> DAP[VS Code DebugSession customRequest]
   ROUTER -->|events| BUS
 ```
@@ -38,7 +39,7 @@ flowchart LR
 
 - creates services via `createHostServices`
 - registers `MemoryViewProvider` for panel view
-- registers three commands
+- registers five StackScope commands
 - sets cleanup disposables for tracker/provider
 
 ### Composition root
@@ -63,6 +64,7 @@ sequenceDiagram
   participant H as HostMessageRouter
   participant S as SessionTracker
   participant D as DebugGateway
+  participant M as MemoryDocumentService
   participant R as DocumentRegistry
 
   W->>B: init()
@@ -74,16 +76,18 @@ sequenceDiagram
 
   W->>B: openDocument(target)
   B->>H: request openDocument
-  H->>S: refresh()
-  H->>D: evaluateForMemoryReference(target)
-  H->>R: add/setActive
+  H->>M: openDocument(target)
+  M->>S: refresh()
+  M->>D: evaluateForMemoryReference(target)
+  M->>R: add/setActive
   H-->>B: OpenDocumentResult
   H-->>B: event documentChanged
 
   W->>B: readMemory(documentId, offset, count)
   B->>H: request readMemory
-  H->>S: refresh()
-  H->>D: readMemory(...)
+  H->>M: readMemory(...)
+  M->>S: refresh()
+  M->>D: readMemory(...)
   H-->>B: ReadMemoryResult
 ```
 
@@ -98,6 +102,18 @@ sequenceDiagram
 - `onDidChangeActiveDebugSession`
 
 It also probes session status using `threads` and `stackTrace` in `probeSessionState`.
+
+`SessionProbeGuard` invalidates older probes when session or stack events arrive. A delayed probe therefore cannot overwrite newer session state.
+
+## Memory document and paging state
+
+`MemoryDocumentService` owns document opening, selection, closure, metadata updates, DAP-backed reads, and `documentChanged` events. `DocumentRegistry` remains the in-memory store for immutable `MemoryDocument` values.
+
+The webview hook `usePagedMemory` keeps page cache state. `MemoryLoadGeneration` marks each reset or full refresh; responses from older generations are ignored because debugger requests cannot always be cancelled after dispatch.
+
+## DAP response handling
+
+`DapDebugGateway` remains the VS Code adapter. `DapResponseNormalizer` converts DAP memory responses into the stable `ReadMemoryResult` shape, including base64 decoding, unreadable-byte padding, and numeric-address fallback.
 
 ## Webview/provider model
 

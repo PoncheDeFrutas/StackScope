@@ -8,7 +8,11 @@ import type {
 	StackThreadSnapshot,
 } from '../../protocol/methods.js';
 import type { EventName, EventMap } from '../../protocol/events.js';
-import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js';
+import {
+	ProtocolErrorCode,
+	createProtocolError,
+	normalizeProtocolError,
+} from '../../protocol/errors.js';
 import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
@@ -16,13 +20,7 @@ import type { PresetService } from '../services/PresetService.js';
 import type { RegisterSetService } from '../services/RegisterSetService.js';
 import type { StackSelectionService } from '../services/StackSelectionService.js';
 import type { ViewStateService } from '../services/ViewStateService.js';
-import {
-	createMemoryDocument,
-	isLiteralAddress,
-	type MemoryDocument,
-} from '../../domain/documents/MemoryDocument.js';
-import { DEFAULT_CONFIG } from '../../domain/config/MemoryViewConfig.js';
-import { generateDocumentId } from '../../shared/ids.js';
+import { MemoryDocumentService } from '../services/MemoryDocumentService.js';
 import { isBuiltinPreset } from '../../domain/presets/MemoryPreset.js';
 import { isBuiltinRegisterSet } from '../../domain/registers/RegisterSet.js';
 import { resolveRequestedFrame, toInstructionSnapshots } from './stackNavigation.js';
@@ -38,17 +36,25 @@ type MethodHandler<M extends MethodName> = (
 export class HostMessageRouter {
 	private readonly handlers = new Map<string, MethodHandler<MethodName>>();
 	private readonly webviews = new Map<vscode.Webview, vscode.Disposable>();
+	private readonly documentService: MemoryDocumentService;
 	private sessionListenerDispose: (() => void) | null = null;
 
 	constructor(
 		private readonly sessionTracker: SessionTracker,
 		private readonly debugGateway: DebugGateway,
-		private readonly documentRegistry: DocumentRegistry,
+		documentRegistry: DocumentRegistry,
 		private readonly presetService: PresetService,
 		private readonly registerSetService: RegisterSetService,
 		private readonly stackSelectionService: StackSelectionService,
 		private readonly viewStateService: ViewStateService
 	) {
+		this.documentService = new MemoryDocumentService(
+			this.sessionTracker,
+			this.debugGateway,
+			documentRegistry,
+			(sessionId) => this.getSelectedFrameId(sessionId),
+			(payload) => this.sendEvent('documentChanged', payload)
+		);
 		this.registerHandlers();
 	}
 
@@ -107,8 +113,7 @@ export class HostMessageRouter {
 	private registerHandlers(): void {
 		this.handlers.set('init', async () => {
 			const state = await this.sessionTracker.refresh();
-			const activeDoc = this.documentRegistry.getActive();
-			const documents = this.documentRegistry.getAll();
+			const { activeDocument, documents } = this.documentService.listDocuments();
 			const presets = this.presetService.getAll();
 			const registerSets = this.registerSetService.getAll();
 			const viewState = this.viewStateService.get();
@@ -118,8 +123,8 @@ export class HostMessageRouter {
 					sessionId: state.sessionId,
 					status: state.status,
 				},
-				activeDocument: activeDoc ? this.toDocumentSnapshot(activeDoc) : null,
-				documents: documents.map((doc) => this.toDocumentSnapshot(doc)),
+				activeDocument,
+				documents,
 				presets: presets.map((p) => ({
 					id: p.id,
 					name: p.name,
@@ -142,229 +147,24 @@ export class HostMessageRouter {
 			};
 		});
 
-		this.handlers.set('readMemory', async (params) => {
-			const { documentId, offset, count } = params as MethodMap['readMemory']['params'];
+		this.handlers.set('readMemory', (params) =>
+			this.documentService.readMemory(params as MethodMap['readMemory']['params'])
+		);
 
-			let doc = this.documentRegistry.get(documentId);
-			if (!doc) {
-				throw createProtocolError(
-					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
-					`Document ${documentId} not found`
-				);
-			}
+		this.handlers.set('openDocument', (params) =>
+			this.documentService.openDocument(params as MethodMap['openDocument']['params'])
+		);
 
-			const state = await this.sessionTracker.refresh();
-			if (!state.sessionId) {
-				throw createProtocolError(
-					ProtocolErrorCode.NO_ACTIVE_SESSION,
-					'No active debug session'
-				);
-			}
-
-			if (state.status !== 'stopped') {
-				throw createProtocolError(
-					ProtocolErrorCode.SESSION_NOT_STOPPED,
-					'Debug session is not stopped. Pause execution to read memory.'
-				);
-			}
-
-			const selectedFrameId = this.getSelectedFrameId(state.sessionId);
-
-			let memoryReference = doc.memoryReference;
-			if (doc.isDynamic) {
-				const newReference = await this.debugGateway.evaluateForMemoryReference(
-					state.sessionId,
-					doc.address,
-					selectedFrameId
-				);
-				if (newReference) {
-					memoryReference = newReference;
-					if (newReference !== doc.memoryReference) {
-						const updated = this.documentRegistry.updateMemoryReference(
-							documentId,
-							newReference
-						);
-						if (updated) {
-							doc = updated;
-						}
-					}
-				}
-
-				if (!newReference && !doc.hasResolvedReference) {
-					return {
-						address: '0x0',
-						data: new Array(count).fill(null),
-						bytesRead: 0,
-						hasUnreadable: true,
-					};
-				}
-			}
-
-			const result = await this.debugGateway.readMemory(
-				state.sessionId,
-				memoryReference,
-				offset,
-				count
-			);
-
-			if (!result) {
-				throw createProtocolError(
-					ProtocolErrorCode.READ_MEMORY_FAILED,
-					'Failed to read memory from debugger'
-				);
-			}
-
-			return result;
-		});
-
-		this.handlers.set('openDocument', async (params) => {
-			const { target, displayName, config } = params as MethodMap['openDocument']['params'];
-			const state = await this.sessionTracker.refresh();
-
-			if (!state.sessionId) {
-				throw createProtocolError(
-					ProtocolErrorCode.NO_ACTIVE_SESSION,
-					'No active debug session'
-				);
-			}
-
-			if (state.status !== 'stopped') {
-				throw createProtocolError(
-					ProtocolErrorCode.SESSION_NOT_STOPPED,
-					'Debug session is not stopped. Pause execution first.'
-				);
-			}
-
-			const existingDoc = this.documentRegistry.findBySessionTarget(state.sessionId, target);
-			if (existingDoc) {
-				this.documentRegistry.setActive(existingDoc.id);
-				const snapshot = this.toDocumentSnapshot(existingDoc);
-				this.sendEvent('documentChanged', {
-					document: snapshot,
-					documents: this.getDocumentSnapshots(),
-				});
-
-				return {
-					document: snapshot,
-					documents: this.getDocumentSnapshots(),
-				};
-			}
-
-			const memoryReference = await this.debugGateway.evaluateForMemoryReference(
-				state.sessionId,
-				target,
-				this.getSelectedFrameId(state.sessionId)
-			);
-
-			const isLiteral = isLiteralAddress(target);
-			const resolvedReference = memoryReference ?? (isLiteral ? target.trim() : '0x0');
-			const hasResolvedReference = memoryReference !== null;
-
-			if (!hasResolvedReference && isLiteral) {
-				throw createProtocolError(
-					ProtocolErrorCode.INVALID_ADDRESS,
-					`Could not parse literal address "${target}".`
-				);
-			}
-
-			const doc = createMemoryDocument(
-				generateDocumentId(),
-				target,
-				state.sessionId,
-				resolvedReference,
-				hasResolvedReference,
-				config ?? DEFAULT_CONFIG,
-				displayName?.trim() || target
-			);
-
-			this.documentRegistry.add(doc);
-			this.documentRegistry.setActive(doc.id);
-
-			this.sendEvent('documentChanged', {
-				document: this.toDocumentSnapshot(doc),
-				documents: this.getDocumentSnapshots(),
-			});
-
-			return {
-				document: this.toDocumentSnapshot(doc),
-				documents: this.getDocumentSnapshots(),
-			};
-		});
-
-		this.handlers.set('listDocuments', async () => ({
-			documents: this.getDocumentSnapshots(),
-			activeDocument: this.getActiveDocumentSnapshot(),
-		}));
-
-		this.handlers.set('selectDocument', async (params) => {
-			const { id } = params as MethodMap['selectDocument']['params'];
-			const doc = this.documentRegistry.get(id);
-			if (!doc) {
-				throw createProtocolError(
-					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
-					`Document ${id} not found`
-				);
-			}
-			this.documentRegistry.setActive(id);
-
-			const snapshot = this.toDocumentSnapshot(doc);
-			this.sendEvent('documentChanged', {
-				document: snapshot,
-				documents: this.getDocumentSnapshots(),
-			});
-
-			return {
-				document: snapshot,
-				documents: this.getDocumentSnapshots(),
-			};
-		});
-
-		this.handlers.set('closeDocument', async (params) => {
-			const { id } = params as MethodMap['closeDocument']['params'];
-			const wasActive = this.documentRegistry.getActive()?.id === id;
-			this.documentRegistry.remove(id);
-			if (wasActive) {
-				const next = this.documentRegistry.getAll()[0] ?? null;
-				this.documentRegistry.setActive(next?.id ?? null);
-			}
-
-			const activeDoc = this.documentRegistry.getActive();
-			const activeSnapshot = activeDoc ? this.toDocumentSnapshot(activeDoc) : null;
-			this.sendEvent('documentChanged', {
-				document: activeSnapshot,
-				documents: this.getDocumentSnapshots(),
-			});
-
-			return {
-				activeDocument: activeSnapshot,
-				documents: this.getDocumentSnapshots(),
-			};
-		});
-
-		this.handlers.set('updateDocument', async (params) => {
-			const { id, displayName, config } = params as MethodMap['updateDocument']['params'];
-			const doc = this.documentRegistry.updateMetadata(id, {
-				displayName: displayName?.trim() || undefined,
-				config,
-			});
-			if (!doc) {
-				throw createProtocolError(
-					ProtocolErrorCode.DOCUMENT_NOT_FOUND,
-					`Document ${id} not found`
-				);
-			}
-
-			const snapshot = this.toDocumentSnapshot(doc);
-			this.sendEvent('documentChanged', {
-				document: snapshot,
-				documents: this.getDocumentSnapshots(),
-			});
-
-			return {
-				document: snapshot,
-				documents: this.getDocumentSnapshots(),
-			};
-		});
+		this.handlers.set('listDocuments', async () => this.documentService.listDocuments());
+		this.handlers.set('selectDocument', async (params) =>
+			this.documentService.selectDocument(params as MethodMap['selectDocument']['params'])
+		);
+		this.handlers.set('closeDocument', async (params) =>
+			this.documentService.closeDocument(params as MethodMap['closeDocument']['params'])
+		);
+		this.handlers.set('updateDocument', async (params) =>
+			this.documentService.updateDocument(params as MethodMap['updateDocument']['params'])
+		);
 
 		this.handlers.set('listPresets', async () => {
 			const presets = this.presetService.getAll();
@@ -607,13 +407,7 @@ export class HostMessageRouter {
 				result,
 			});
 		} catch (err) {
-			const error =
-				err && typeof err === 'object' && 'code' in err
-					? (err as ReturnType<typeof createProtocolError>)
-					: createProtocolError(
-						ProtocolErrorCode.UNKNOWN_ERROR,
-						err instanceof Error ? err.message : 'Unknown error'
-					);
+			const error = normalizeProtocolError(err);
 
 			this.sendResponse(webview, request.id, {
 				type: 'response',
@@ -630,25 +424,6 @@ export class HostMessageRouter {
 		response: ProtocolResponse<unknown>
 	): void {
 		void webview.postMessage(response);
-	}
-
-	private toDocumentSnapshot(doc: MemoryDocument): MethodMap['listDocuments']['result']['documents'][number] {
-		return {
-			id: doc.id,
-			address: doc.address,
-			displayName: doc.displayName,
-			sessionId: doc.sessionId,
-			config: doc.config,
-		};
-	}
-
-	private getDocumentSnapshots(): MethodMap['listDocuments']['result']['documents'] {
-		return this.documentRegistry.getAll().map((doc) => this.toDocumentSnapshot(doc));
-	}
-
-	private getActiveDocumentSnapshot(): MethodMap['listDocuments']['result']['activeDocument'] {
-		const doc = this.documentRegistry.getActive();
-		return doc ? this.toDocumentSnapshot(doc) : null;
 	}
 
 	private getSelectionSnapshot(): StackSelectionSnapshot {

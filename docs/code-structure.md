@@ -39,8 +39,11 @@ src/
 | `src/host/activate.ts` | activation, registration, disposal wiring |
 | `src/host/providers/MemoryViewProvider.ts` | panel webview provider and HTML setup |
 | `src/host/bridge/HostMessageRouter.ts` | typed method handlers and event push to webview |
+| `src/host/services/MemoryDocumentService.ts` | document lifecycle, snapshots, and memory-read orchestration |
 | `src/debug/vscode/VscodeSessionTracker.ts` | session state tracking/probing |
+| `src/debug/vscode/SessionProbeGuard.ts` | stale asynchronous session-probe protection |
 | `src/debug/dap/DapDebugGateway.ts` | DAP customRequest adapter for memory/register operations |
+| `src/debug/dap/DapResponseNormalizer.ts` | stable memory-result and DAP error normalization |
 | `src/debug/dap/DapAddressResolver.ts` | target expression resolution strategy |
 | `src/domain/documents/MemoryDocument.ts` | immutable memory document model |
 | `src/domain/documents/DocumentRegistry.ts` | active document registry |
@@ -48,6 +51,7 @@ src/
 | `src/protocol/methods.ts` | typed RPC methods and payloads |
 | `src/webview/App.tsx` | UI orchestration and state transitions |
 | `src/webview/hooks/usePagedMemory.ts` | page cache and loading logic |
+| `src/webview/hooks/MemoryLoadGeneration.ts` | stale page-response protection |
 | `src/webview/components/VirtualMemoryGrid.tsx` | virtualized hex/decoded rendering |
 
 ## Supporting files

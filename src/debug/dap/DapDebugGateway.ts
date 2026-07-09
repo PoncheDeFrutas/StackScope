@@ -9,6 +9,10 @@ import type {
 	StackThreadResult,
 } from '../contracts/DebugGateway.js';
 import { DapAddressResolver } from './DapAddressResolver.js';
+import {
+	getDapErrorMessage,
+	normalizeReadMemoryResponse,
+} from './DapResponseNormalizer.js';
 
 /**
  * DAP-based implementation of DebugGateway.
@@ -35,39 +39,10 @@ export class DapDebugGateway implements DebugGateway {
 				count,
 			});
 
-			if (!response) {
-				// Complete failure - return array of nulls to indicate unreadable
-				return this.createUnreadableResult(memoryReference, offset, count);
-			}
-
-			if (!response.data) {
-				// No data returned - treat as unreadable
-				return this.createUnreadableResult(memoryReference, offset, count);
-			}
-
-			// DAP returns data as base64 encoded string
-			const base64Data: string = response.data;
-			const bytes = this.decodeBase64(base64Data);
-
-			// Check if we got fewer bytes than requested
-			const hasUnreadable = bytes.length < count;
-			
-			// Pad with nulls if fewer bytes returned
-			const paddedData: (number | null)[] = [...bytes];
-			while (paddedData.length < count) {
-				paddedData.push(null);
-			}
-
-			return {
-				address: response.address ?? memoryReference,
-				data: paddedData,
-				bytesRead: bytes.length,
-				hasUnreadable,
-			};
+			return normalizeReadMemoryResponse(memoryReference, offset, count, response);
 		} catch (err) {
 			console.error('[DapDebugGateway] readMemory failed:', err);
-			// Return unreadable result instead of null to show the grid with ~~ markers
-			return this.createUnreadableResult(memoryReference, offset, count);
+			return normalizeReadMemoryResponse(memoryReference, offset, count, null);
 		}
 	}
 
@@ -108,8 +83,7 @@ export class DapDebugGateway implements DebugGateway {
 					const value = await this.evaluateRegister(session, expression, effectiveFrameId);
 					return { expression, value };
 				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err);
-					return { expression, value: null, error: message };
+					return { expression, value: null, error: getDapErrorMessage(err) };
 				}
 			})
 		);
@@ -227,7 +201,7 @@ export class DapDebugGateway implements DebugGateway {
 
 			return { instructions };
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
+			const message = getDapErrorMessage(err);
 			console.error('[DapDebugGateway] readDisassembly failed:', err);
 			return {
 				instructions: [],
@@ -337,31 +311,4 @@ export class DapDebugGateway implements DebugGateway {
 		return undefined;
 	}
 
-	private decodeBase64(base64: string): number[] {
-		// Node.js Buffer is available in VS Code extension host
-		const buffer = Buffer.from(base64, 'base64');
-		return Array.from(buffer);
-	}
-
-	private createUnreadableResult(
-		memoryReference: string,
-		offset: number,
-		count: number
-	): ReadMemoryResult {
-		// Calculate the address including offset
-		let address = memoryReference;
-		try {
-			const baseAddr = BigInt(memoryReference);
-			address = '0x' + (baseAddr + BigInt(offset)).toString(16);
-		} catch {
-			// Keep original reference if parsing fails
-		}
-
-		return {
-			address,
-			data: new Array(count).fill(null),
-			bytesRead: 0,
-			hasUnreadable: true,
-		};
-	}
 }

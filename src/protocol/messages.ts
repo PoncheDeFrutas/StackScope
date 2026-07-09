@@ -55,3 +55,37 @@ export type ProtocolMessage =
 	| ProtocolRequest<string, unknown>
 	| ProtocolResponse<unknown>
 	| ProtocolEvent<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+export function isProtocolResponse(value: unknown): value is ProtocolResponse<unknown> {
+	if (
+		!isRecord(value) ||
+		value.type !== 'response' ||
+		typeof value.id !== 'string' ||
+		typeof value.success !== 'boolean'
+	) {
+		return false;
+	}
+
+	if (value.success) {
+		return 'result' in value;
+	}
+
+	return (
+		isRecord(value.error) &&
+		typeof value.error.code === 'string' &&
+		typeof value.error.message === 'string'
+	);
+}
+
+export function isProtocolEvent(value: unknown): value is ProtocolEvent<string, unknown> {
+	return (
+		isRecord(value) &&
+		value.type === 'event' &&
+		typeof value.event === 'string' &&
+		'payload' in value
+	);
+}
