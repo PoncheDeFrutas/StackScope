@@ -31,6 +31,8 @@ pnpm run lint
 pnpm run test
 ```
 
+See [Testing](testing.md) for test layout, extension-runtime requirements, and coverage boundaries.
+
 ## Run extension locally (Extension Development Host)
 
 Use `.vscode/launch.json` configuration `Run Extension`.

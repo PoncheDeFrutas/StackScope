@@ -1,87 +1,72 @@
 # Protocol and Host API
 
-StackScope uses a typed request/response/event protocol between webview and host.
+StackScope uses typed request, response, and event messages between webview and extension host. Definitions live in src/protocol/.
 
 ## Message envelopes
 
-Defined in `src/protocol/messages.ts`.
+- Request: type request, id, method, params
+- Successful response: type response, id, success true, result
+- Error response: type response, id, success false, error
+- Event: type event, event, payload
 
-- Request: `type: 'request'`, `id`, `method`, `params`
-- Response success: `type: 'response'`, `id`, `success: true`, `result`
-- Response error: `type: 'response'`, `id`, `success: false`, `error`
-- Event: `type: 'event'`, `event`, `payload`
+WebviewMessageBus validates incoming response and event envelope shape before dispatching it. Invalid messages are ignored.
 
-## Method contracts
+## Methods
 
-Defined in `src/protocol/methods.ts` (`MethodMap`).
+MethodMap in src/protocol/methods.ts is source of truth.
 
-### Session/document methods
+### Initialization and documents
 
-- `init`
-- `openDocument`
-- `readMemory`
+- init
+- openDocument
+- readMemory
+- listDocuments
+- selectDocument
+- closeDocument
+- updateDocument
 
-### Preset methods
+### Presets and register sets
 
-- `listPresets`
-- `savePreset`
-- `deletePreset`
+- listPresets
+- savePreset
+- deletePreset
+- listRegisterSets
+- saveRegisterSet
+- updateRegisterSet
+- deleteRegisterSet
+- selectRegisterSet
+- readRegisters
 
-### Register-set methods
+### View and debug navigation
 
-- `listRegisterSets`
-- `saveRegisterSet`
-- `updateRegisterSet`
-- `deleteRegisterSet`
-- `selectRegisterSet`
-- `readRegisters`
+- saveViewState
+- listCallStack
+- selectStackFrame
+- getDisassembly
 
-## Event contracts
+## Events
 
-Defined in `src/protocol/events.ts`:
+EventMap in src/protocol/events.ts defines:
 
-- `sessionChanged`
-- `documentChanged`
+- sessionChanged
+- documentChanged
+- callStackChanged
+- disassemblyChanged
+- debugNavigationModeChanged
 
-## Error model
+## Errors
 
-Defined in `src/protocol/errors.ts`:
+ProtocolError includes code, message, and optional details. Host handlers convert unexpected exceptions through normalizeProtocolError before replying.
 
-- `NO_ACTIVE_SESSION`
-- `SESSION_NOT_STOPPED`
-- `READ_MEMORY_FAILED`
-- `INVALID_ADDRESS`
-- `DOCUMENT_NOT_FOUND`
-- `SYMBOL_NOT_FOUND`
-- `REGISTER_NOT_AVAILABLE`
-- `UNKNOWN_ERROR`
+Webview clients receive ProtocolRequestError. It preserves host error code and details while retaining Error message behavior for existing UI handling.
 
-## Host-side handler implementation
+## Responsibilities
 
-Handlers are implemented in `src/host/bridge/HostMessageRouter.ts`.
+- HostMessageRouter owns transport dispatch and response/event delivery.
+- MemoryDocumentService owns document lifecycle and debugger-backed memory reads.
+- HostClient exposes typed calls to React components.
+- WebviewMessageBus correlates requests, dispatches events, and releases listeners and pending requests when disposed.
 
-Notable behavior:
+## Change rule
 
-- `init` returns session + active doc + presets + register sets + selected register set id.
-- `openDocument` requires stopped session and creates immutable `MemoryDocument`.
-- `readMemory` requires stopped session and re-resolves dynamic targets.
-- `readRegisters` requires stopped session and maps results to register set entries.
-
-## Webview client bindings
-
-`src/webview/rpc/HostClient.ts` is the typed API used by React components.
-
-`src/webview/rpc/WebviewMessageBus.ts` handles request correlation and event dispatch.
-
-## Flow summary
-
-```mermaid
-flowchart TD
-  A[React Component] --> B[HostClient]
-  B --> C[WebviewMessageBus.request]
-  C --> D[HostMessageRouter handler]
-  D --> E[Service/Debug Layer]
-  E --> D
-  D --> C
-  C --> A
-```
+Protocol changes must update MethodMap or EventMap, host handler registration, HostClient, consuming UI, and tests together.

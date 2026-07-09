@@ -16,7 +16,7 @@ These points are direct observations from current code.
 ## Data/loading constraints
 
 - Page cache returns `null` from `getBytes` if any page in requested range is not loaded; row then renders loading placeholders.
-- Refresh keeps old page data visible while in-flight to avoid blanking.
+- Refresh keeps old page data visible while reloading. Load generations discard delayed responses from earlier document selections or refreshes.
 
 ## Register panel constraints
 
