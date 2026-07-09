@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { ProtocolErrorCode, ProtocolRequestError } from '../../protocol/errors.js';
 import { HostClient } from '../rpc/HostClient.js';
+import { MemoryLoadGeneration } from './MemoryLoadGeneration.js';
 
 /** Default page size in bytes */
 export const PAGE_SIZE = 4096;
@@ -63,6 +65,9 @@ export function usePagedMemory(): UsePagedMemoryResult {
 		pages: new Map(),
 		inFlight: new Set(),
 	});
+	const documentIdRef = useRef<string | null>(null);
+	const loadGenerationRef = useRef(new MemoryLoadGeneration());
+	const inFlightRef = useRef(new Map<number, number>());
 
 	// Track mounted state to avoid state updates after unmount
 	const mountedRef = useRef(true);
@@ -84,10 +89,25 @@ export function usePagedMemory(): UsePagedMemoryResult {
 	 * Loads a single page.
 	 */
 	const loadPage = useCallback(
-		async (documentId: string, pageOffset: number): Promise<void> => {
-			// Skip if already loaded or in flight
+		async (
+			documentId: string,
+			pageOffset: number,
+			forceReload: boolean = false
+		): Promise<void> => {
+			const generation = loadGenerationRef.current.current();
+			if (
+				documentIdRef.current !== documentId ||
+				(!forceReload && inFlightRef.current.has(pageOffset))
+			) {
+				return;
+			}
+			inFlightRef.current.set(pageOffset, generation);
+
 			setState((prev) => {
-				if (prev.pages.has(pageOffset) || prev.inFlight.has(pageOffset)) {
+				if (
+					prev.documentId !== documentId ||
+					!loadGenerationRef.current.isCurrent(generation)
+				) {
 					return prev;
 				}
 				return {
@@ -99,12 +119,20 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			try {
 				const result = await HostClient.readMemory(documentId, pageOffset, PAGE_SIZE);
 
-				if (!mountedRef.current) {
+				if (
+					!mountedRef.current ||
+					documentIdRef.current !== documentId ||
+					!loadGenerationRef.current.isCurrent(generation)
+				) {
 					return;
 				}
+				inFlightRef.current.delete(pageOffset);
 
 				setState((prev) => {
-					if (prev.documentId !== documentId) {
+					if (
+						prev.documentId !== documentId ||
+						!loadGenerationRef.current.isCurrent(generation)
+					) {
 						return prev;
 					}
 
@@ -128,15 +156,25 @@ export function usePagedMemory(): UsePagedMemoryResult {
 					};
 				});
 			} catch (err) {
-				if (!mountedRef.current) {
+				if (
+					!mountedRef.current ||
+					documentIdRef.current !== documentId ||
+					!loadGenerationRef.current.isCurrent(generation)
+				) {
 					return;
 				}
+				inFlightRef.current.delete(pageOffset);
 
 				const message = err instanceof Error ? err.message : 'Load failed';
 
-				// Don't set error for "not stopped" - just clear inflight
-				if (message.toLowerCase().includes('not stopped')) {
+				if (isSessionNotStoppedError(err, message)) {
 					setState((prev) => {
+						if (
+							prev.documentId !== documentId ||
+							!loadGenerationRef.current.isCurrent(generation)
+						) {
+							return prev;
+						}
 						const newInFlight = new Set(prev.inFlight);
 						newInFlight.delete(pageOffset);
 						return { ...prev, inFlight: newInFlight };
@@ -145,7 +183,10 @@ export function usePagedMemory(): UsePagedMemoryResult {
 				}
 
 				setState((prev) => {
-					if (prev.documentId !== documentId) {
+					if (
+						prev.documentId !== documentId ||
+						!loadGenerationRef.current.isCurrent(generation)
+					) {
 						return prev;
 					}
 
@@ -241,6 +282,9 @@ export function usePagedMemory(): UsePagedMemoryResult {
 	 */
 	const reset = useCallback(
 		(documentId: string, baseAddress: string, totalSize: number): void => {
+			loadGenerationRef.current.advance();
+			documentIdRef.current = documentId;
+			inFlightRef.current.clear();
 			setState({
 				documentId,
 				baseAddress,
@@ -266,14 +310,13 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			return;
 		}
 
-		// Keep existing data visible while refreshing to avoid blank grid on race conditions.
-		setState((prev) => ({
-			...prev,
-			inFlight: new Set([...prev.inFlight, ...pageOffsets]),
-		}));
+		loadGenerationRef.current.advance();
+		inFlightRef.current.clear();
+		setState((prev) =>
+			prev.documentId === docId ? { ...prev, inFlight: new Set() } : prev
+		);
 
-		// Reload all pages
-		await Promise.all(pageOffsets.map((offset) => loadPage(docId, offset)));
+		await Promise.all(pageOffsets.map((offset) => loadPage(docId, offset, true)));
 	}, [state.documentId, state.pages, loadPage]);
 
 	const isLoading = state.inFlight.size > 0;
@@ -286,6 +329,14 @@ export function usePagedMemory(): UsePagedMemoryResult {
 		refreshAll,
 		isLoading,
 	};
+}
+
+function isSessionNotStoppedError(error: unknown, message: string): boolean {
+	return (
+		(error instanceof ProtocolRequestError &&
+			error.code === ProtocolErrorCode.SESSION_NOT_STOPPED) ||
+		message.toLowerCase().includes('not stopped')
+	);
 }
 
 function resolveBaseAddress(address: string, pageOffset: number): string | null {
