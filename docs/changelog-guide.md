@@ -49,7 +49,7 @@ pnpm run compile
 
 ## Versioning approach used so far
 
-Current version in `package.json` is `0.1.2`.
+Current version in `package.json` is `0.1.3`.
 
 Practical progression:
 
