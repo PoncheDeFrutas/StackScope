@@ -25,6 +25,7 @@ src/
   shared/
   webview/
     App.tsx
+    RegistersApp.tsx
     main.tsx
     components/
     hooks/
@@ -37,7 +38,9 @@ src/
 | --- | --- |
 | `src/extension.ts` | extension entry re-export |
 | `src/host/activate.ts` | activation, registration, disposal wiring |
-| `src/host/providers/MemoryViewProvider.ts` | panel webview provider and HTML setup |
+| `src/host/providers/StackScopeWebviewViewProvider.ts` | shared sidebar webview lifecycle and HTML setup |
+| `src/host/providers/MemoryViewProvider.ts` | StackScope memory panel provider |
+| `src/host/providers/RegisterViewProvider.ts` | StackScope Registers Activity Bar provider |
 | `src/host/bridge/HostMessageRouter.ts` | typed method handlers and event push to webview |
 | `src/host/services/MemoryDocumentService.ts` | document lifecycle, snapshots, and memory-read orchestration |
 | `src/debug/vscode/VscodeSessionTracker.ts` | session state tracking/probing |
@@ -50,6 +53,7 @@ src/
 | `src/domain/config/MemoryViewConfig.ts` | settings types, defaults, validation |
 | `src/protocol/methods.ts` | typed RPC methods and payloads |
 | `src/webview/App.tsx` | UI orchestration and state transitions |
+| `src/webview/RegistersApp.tsx` | independent register inspection UI and register-set editing |
 | `src/webview/hooks/usePagedMemory.ts` | page cache and loading logic |
 | `src/webview/hooks/MemoryLoadGeneration.ts` | stale page-response protection |
 | `src/webview/components/VirtualMemoryGrid.tsx` | virtualized hex/decoded rendering |

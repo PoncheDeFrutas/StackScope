@@ -7,7 +7,7 @@ This guide explains where to implement common extension changes using current ar
 1. Define protocol types in `src/protocol/methods.ts`.
 2. Implement host handler in `src/host/bridge/HostMessageRouter.ts`.
 3. Add typed client method in `src/webview/rpc/HostClient.ts`.
-4. Consume method in `src/webview/App.tsx` or target component.
+4. Consume method in `src/webview/App.tsx`, `src/webview/RegistersApp.tsx`, or target component.
 
 Keep request/response types synchronized across all 4 points.
 

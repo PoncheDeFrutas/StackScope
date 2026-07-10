@@ -40,6 +40,7 @@ MethodMap in src/protocol/methods.ts is source of truth.
 ### View and debug navigation
 
 - saveViewState
+- saveRegisterViewState
 - listCallStack
 - selectStackFrame
 - getDisassembly
@@ -66,6 +67,11 @@ Webview clients receive ProtocolRequestError. It preserves host error code and d
 - MemoryDocumentService owns document lifecycle and debugger-backed memory reads.
 - HostClient exposes typed calls to React components.
 - WebviewMessageBus correlates requests, dispatches events, and releases listeners and pending requests when disposed.
+
+## View state ownership
+
+- `saveViewState` persists memory-view target, configuration, and settings visibility.
+- `saveRegisterViewState` persists only register value format so memory and Registers webviews do not overwrite each other's state.
 
 ## Change rule
 

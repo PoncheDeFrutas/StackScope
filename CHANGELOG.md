@@ -6,6 +6,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Changed
+
+- Moved register inspection from the memory view into a dedicated Activity Bar view.
+- Added the `StackScope: Focus Registers View` command and shared sidebar webview lifecycle.
+
 ## [0.1.3] - 2026-07-09
 
 ### Changed

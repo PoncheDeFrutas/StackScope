@@ -9,7 +9,7 @@ It is not a guarantee of delivery order.
 - Debugger-backed memory reads via DAP (`readMemory`)
 - Virtualized memory grid with hex + decoded rendering
 - Memory presets persisted in workspace state
-- Register panel with custom register sets and output formatting
+- Registers view with custom register sets and output formatting
 - Workspace-scoped view state persistence with deferred last-target restore
 
 ## Planned enhancements
@@ -20,7 +20,7 @@ Status: implemented
 
 - Persist UI state across reloads/reopen flows
 - Restore the last target automatically when a stopped session is available
-- Preserve layout and register panel preferences per workspace
+- Preserve memory UI state and register value format per workspace
 
 ### 2) Byte-change highlighting improvements
 

@@ -8,12 +8,10 @@ This page describes current UI behavior from `src/webview/*`.
 
 1. `Toolbar`
 2. optional `SettingsPanel`
-3. collapsible register section (`RegisterPanel`)
-4. memory content (`VirtualMemoryGrid` or message state)
-5. `StatusBar`
-6. modal `RegisterSetEditor` when editing/creating sets
+3. memory content (`VirtualMemoryGrid` or message state)
+4. `StatusBar`
 
-Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNavigationApp.tsx`.
+Separate webviews render `RegistersApp` for register inspection and `DebugNavigationApp` for editor-tab execution navigation.
 
 ## App state phases
 
@@ -32,13 +30,11 @@ Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNav
 
 - While `running`, memory view shows a pause message.
 - On transition to `running`, baseline bytes are captured for change highlighting.
-- On transition to `stopped`, pending refresh flags trigger:
-  - memory page refresh (`refreshAll`)
-  - register refresh (`readRegisters`)
+- On transition to `stopped`, memory view refreshes loaded pages (`refreshAll`).
 - If no document is active but a persisted target exists, the webview keeps that target and attempts a deferred reopen once a session is `stopped`.
 - Changed-byte highlighting only applies to offsets that had a known baseline before the previous `run`.
 - Changed-byte state is cleared when a new run starts or a different target/document is opened.
-- Call stack changes emitted by host cause memory/register views to refresh against the currently selected StackScope frame when possible.
+- Call stack changes emitted by host cause memory view to refresh against the currently selected StackScope frame when possible.
 
 ## Debug navigation behavior (`src/webview/DebugNavigationApp.tsx`)
 
@@ -59,13 +55,12 @@ Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNav
 ## View persistence behavior
 
 - Webview UI state is restored from workspace state during `init`.
-- Persisted fields include:
+- Memory view persists:
   - current target
   - `MemoryViewConfig`
   - settings panel visibility
-  - register panel visibility
-  - register panel width
-  - register value format
+- Registers view persists register value format through `saveRegisterViewState`.
+- Legacy register-panel visibility and width fields remain compatible with stored workspace state but are not used by current UI.
 - Register set selection is persisted separately by host-side register set storage.
 
 ## Toolbar behavior (`src/webview/components/Toolbar.tsx`)
@@ -77,17 +72,18 @@ Separate editor-tab execution navigation UI is rendered by `src/webview/DebugNav
 - Includes adjacent save/delete controls for saved preset entries.
 - Includes settings toggle and manual refresh action.
 
-## Register panel behavior (`src/webview/components/RegisterPanel.tsx`)
+## Registers view behavior (`src/webview/RegistersApp.tsx`)
 
+- Available from StackScope Activity Bar container or `StackScope: Focus Registers View`.
 - Set selector chooses current register set.
 - Value format selector changes display format:
   - `hex`, `dec`, `oct`, `bin`, `raw`
 - Table columns are currently `Register` and `Value`.
 - Register column displays `reg.expression`.
 - Value column displays formatted value or placeholders (`--`, `Error`).
-- While session is not stopped, panel shows pause message.
+- While session is not stopped, view shows pause message.
 - While stale, table opacity is reduced.
-- Refresh is manual and also triggered by stopped-state refresh pipeline.
+- Refresh is manual and also triggered by `sessionChanged` stopped events and `callStackChanged` events.
 
 ## Register set editor behavior (`src/webview/components/RegisterSetEditor.tsx`)
 

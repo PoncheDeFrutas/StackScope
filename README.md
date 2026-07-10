@@ -6,23 +6,23 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
   <img src="docs/assets/stackscope.png" width="160" alt="StackScope logo" />
 </p>
 
-![Version](https://img.shields.io/badge/version-0.1.2-blue)
+![Version](https://img.shields.io/badge/version-0.1.3-blue)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.110.0-007ACC)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![GitHub Repo stars](https://img.shields.io/github/stars/PoncheDeFrutas/StackScope?style=social)
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PoncheDeFrutas.StackScope)
-[![wakatime](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27.svg)](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27)
+<!--[![wakatime](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27.svg)](https://wakatime.com/badge/user/dd9cbf79-b76d-4202-aae2-be6bff8a804e/project/431c9b81-461b-4b48-8040-eb16655aca27)
 
 ## Repository Metrics / Analytics
 
-![Repobeats](https://repobeats.axiom.co/api/embed/18b83e6284c2b80d767b8d9ce1c372ba2c90fdc1.svg "Repobeats analytics image")
+![Repobeats](https://repobeats.axiom.co/api/embed/18b83e6284c2b80d767b8d9ce1c372ba2c90fdc1.svg "Repobeats analytics image")-->
 
 
 ## What it does
 
-StackScope reads memory through active debug adapter and presents it in virtualized hex and decoded view. It also supports address expressions, register sets, memory presets, byte-change tracking, call-stack navigation, and disassembly navigation.
+StackScope reads memory through active debug adapter and presents it in virtualized hex and decoded view. Memory and registers have separate VS Code views. It also supports address expressions, register sets, memory presets, byte-change tracking, call-stack navigation, and disassembly navigation.
 
 ## Requirements
 
@@ -38,11 +38,13 @@ Some workflows, including call stack and disassembly, also depend on adapter sup
 2. Run **StackScope: Open Memory View**.
 3. Enter target such as 0x20000000, $sp, or &myVar.
 4. Scroll to load memory pages. Use Settings to change columns, unit size, number format, and total size.
+5. Open **StackScope: Focus Registers View** to inspect registers in its own Activity Bar view.
 
 ## Commands
 
 - **StackScope: Open Memory View**
 - **StackScope: Focus Memory View**
+- **StackScope: Focus Registers View**
 - **StackScope: Open Memory View (Editor Tab)**
 - **StackScope: Open Call Stack (Editor Tab)**
 - **StackScope: Open Disassembly (Editor Tab)**

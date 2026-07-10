@@ -18,11 +18,11 @@ These points are direct observations from current code.
 - Page cache returns `null` from `getBytes` if any page in requested range is not loaded; row then renders loading placeholders.
 - Refresh keeps old page data visible while reloading. Load generations discard delayed responses from earlier document selections or refreshes.
 
-## Register panel constraints
+## Registers view constraints
 
-- Register panel is read-only (no write-back path in protocol or host).
+- Registers view is read-only (no write-back path in protocol or host).
 - Register table currently displays expression in first column.
-- Value formatting in panel is client-side formatting of returned `value` strings.
+- Value formatting is client-side formatting of returned `value` strings.
 
 ## Miscellaneous observations
 

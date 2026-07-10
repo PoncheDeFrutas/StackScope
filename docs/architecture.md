@@ -14,7 +14,8 @@ This architecture description is derived from the current repository code.
 
 ```mermaid
 flowchart LR
-  UI[Webview React App\nApp.tsx] --> BUS[WebviewMessageBus]
+  MEMORY[Memory webview\nApp.tsx] --> BUS[WebviewMessageBus]
+  REGISTERS[Registers webview\nRegistersApp.tsx] --> BUS
   BUS -->|request/response| ROUTER[HostMessageRouter]
   ROUTER --> TRACKER[VscodeSessionTracker]
   ROUTER --> GATEWAY[DapDebugGateway]
@@ -38,8 +39,8 @@ flowchart LR
 `src/host/activate.ts`:
 
 - creates services via `createHostServices`
-- registers `MemoryViewProvider` for panel view
-- registers five StackScope commands
+- registers `MemoryViewProvider` for memory panel and `RegisterViewProvider` for Registers Activity Bar view
+- registers six StackScope commands
 - sets cleanup disposables for tracker/provider
 
 ### Composition root
@@ -54,12 +55,13 @@ flowchart LR
 - `StackSelectionService`
 - `HostMessageRouter`
 - `MemoryViewProvider`
+- `RegisterViewProvider`
 
 ## Data flow
 
 ```mermaid
 sequenceDiagram
-  participant W as Webview (App)
+  participant W as Webview (App or RegistersApp)
   participant B as WebviewMessageBus
   participant H as HostMessageRouter
   participant S as SessionTracker
@@ -72,7 +74,7 @@ sequenceDiagram
   H->>S: refresh()
   H->>R: getActive()
   H-->>B: InitResult
-  B-->>W: session + docs + presets + register sets
+  B-->>W: session + docs + presets + register sets + view state
 
   W->>B: openDocument(target)
   B->>H: request openDocument
@@ -117,7 +119,16 @@ The webview hook `usePagedMemory` keeps page cache state. `MemoryLoadGeneration`
 
 ## Webview/provider model
 
-- Panel view provider: `src/host/providers/MemoryViewProvider.ts`
+- `StackScopeWebviewViewProvider` owns common sidebar webview setup, router attachment, visibility, focus, and disposal.
+- `MemoryViewProvider` configures the StackScope memory panel view.
+- `RegisterViewProvider` configures the StackScope Registers Activity Bar view.
+- `src/webview/main.tsx` selects `App` or `RegistersApp` from the injected webview kind.
 - Editor-tab command also creates a `WebviewPanel` with same bundled `dist/webview.js`.
-- The bundle can render memory or unified debug-navigation views based on the injected webview kind.
+- The bundle can render memory, registers, or unified debug-navigation views based on the injected webview kind.
 - Router attach/detach is called on disposal/visibility transitions.
+
+## Independent view state
+
+Memory and Registers webviews each call `init` and receive shared session and call-stack events through `HostMessageRouter`. `App` owns memory target/configuration state; `RegistersApp` owns register set selection, values, editor state, and value format.
+
+`ViewStateService.save` preserves register-related fields already stored by the Registers view. `saveRegisterViewState` updates only the register value format. This prevents one webview from overwriting the other's persisted state.

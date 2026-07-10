@@ -4,11 +4,12 @@ This page describes how to use the extension based on current code.
 
 ## What StackScope currently provides
 
-- Memory view panel (`stackscope.memoryView`) rendered in a webview.
+- Memory panel view (`stackscope.memoryView`) rendered in a webview.
+- Registers Activity Bar view (`stackscope.registersView`) rendered in an independent webview.
 - Optional editor-tab webview command.
 - Memory open by target expression.
 - Virtualized hex/decoded rendering backed by paged debugger reads.
-- Register panel with selectable register sets and value formatting.
+- Register inspection with selectable register sets and value formatting.
 
 ## Requirements
 
@@ -24,6 +25,7 @@ The host rejects memory/register reads if session status is not `stopped`.
 
 - `StackScope: Open Memory View`
 - `StackScope: Focus Memory View`
+- `StackScope: Focus Registers View`
 - `StackScope: Open Memory View (Editor Tab)`
 - `StackScope: Open Call Stack (Editor Tab)`
 - `StackScope: Open Disassembly (Editor Tab)`
@@ -33,13 +35,13 @@ Registered in `package.json` and wired in `src/host/commands/openMemoryViewComma
 ## Basic usage flow
 
 1. Start a debug session.
-2. Open StackScope panel.
+2. Open StackScope memory panel.
 3. Pause execution.
 4. Enter target and press `Go` in the toolbar.
    - Examples: `0x20000000`, `$sp`, `&myVar`
 5. Scroll memory grid; pages load lazily.
 6. Use settings panel to change columns, unit size, formats, and total size.
-7. Use register panel to select register set and value format.
+7. Open **StackScope: Focus Registers View** to inspect registers, select a register set, and choose a value format.
 8. Open `StackScope: Open Call Stack (Editor Tab)` to inspect threads/frames beside the source file.
 9. Select a frame to reveal its source, switch the same tab to disassembly, and use that frame as the context for memory/register evaluation.
 10. Use `StackScope: Open Disassembly (Editor Tab)` if you want to open the same navigation tab directly in disassembly mode.
@@ -78,7 +80,8 @@ Persisted view state currently includes:
 - Current target
 - Memory view configuration
 - Settings panel visibility
-- Register panel visibility and width
 - Register value format
+
+The register value format is saved independently by the Registers view. Legacy register-panel visibility and width fields are retained only to read existing workspace state; current UI does not use them.
 
 If the webview is restored without an active memory document, StackScope keeps the last target visible and will try to reopen it automatically once a debug session is available and `stopped`.
