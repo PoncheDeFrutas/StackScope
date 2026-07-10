@@ -13,6 +13,16 @@ import {
 	getDapErrorMessage,
 	normalizeReadMemoryResponse,
 } from './DapResponseNormalizer.js';
+import { mapWithConcurrency } from './mapWithConcurrency.js';
+import { reportHostError } from '../../host/services/HostErrorReporter.js';
+
+const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
+
+export interface DapDebugGatewayOptions {
+	maxConcurrentRegisterEvaluations?: number;
+	maxConcurrentStackTraces?: number;
+	sessionResolver?: (sessionId: string) => vscode.DebugSession | undefined;
+}
 
 /**
  * DAP-based implementation of DebugGateway.
@@ -20,6 +30,19 @@ import {
  */
 export class DapDebugGateway implements DebugGateway {
 	private readonly resolver = new DapAddressResolver();
+	private readonly maxConcurrentRegisterEvaluations: number;
+	private readonly maxConcurrentStackTraces: number;
+	private readonly sessionResolver: (sessionId: string) => vscode.DebugSession | undefined;
+
+	constructor(options: DapDebugGatewayOptions = {}) {
+		this.maxConcurrentRegisterEvaluations = normalizeConcurrencyLimit(
+			options.maxConcurrentRegisterEvaluations
+		);
+		this.maxConcurrentStackTraces = normalizeConcurrencyLimit(
+			options.maxConcurrentStackTraces
+		);
+		this.sessionResolver = options.sessionResolver ?? findActiveSession;
+	}
 
 	async readMemory(
 		sessionId: string,
@@ -41,7 +64,7 @@ export class DapDebugGateway implements DebugGateway {
 
 			return normalizeReadMemoryResponse(memoryReference, offset, count, response);
 		} catch (err) {
-			console.error('[DapDebugGateway] readMemory failed:', err);
+			reportHostError('DapDebugGateway.readMemory', err);
 			return normalizeReadMemoryResponse(memoryReference, offset, count, null);
 		}
 	}
@@ -76,19 +99,18 @@ export class DapDebugGateway implements DebugGateway {
 		// Get frame ID for evaluation context
 		const effectiveFrameId = frameId ?? (await this.getTopFrameId(session));
 
-		// Evaluate all expressions in parallel
-		const results = await Promise.all(
-			expressions.map(async (expression): Promise<RegisterEvalResult> => {
+		return mapWithConcurrency(
+			expressions,
+			this.maxConcurrentRegisterEvaluations,
+			async (expression): Promise<RegisterEvalResult> => {
 				try {
 					const value = await this.evaluateRegister(session, expression, effectiveFrameId);
 					return { expression, value };
 				} catch (err) {
 					return { expression, value: null, error: getDapErrorMessage(err) };
 				}
-			})
+			}
 		);
-
-		return results;
 	}
 
 	async listCallStack(sessionId: string): Promise<StackThreadResult[]> {
@@ -105,8 +127,10 @@ export class DapDebugGateway implements DebugGateway {
 
 			const threads = threadsResponse.threads as Array<{ id: number; name?: string }>;
 
-			const stackResults = await Promise.all(
-				threads.map(async (thread): Promise<StackThreadResult> => {
+			const stackResults = await mapWithConcurrency(
+				threads,
+				this.maxConcurrentStackTraces,
+				async (thread): Promise<StackThreadResult> => {
 					try {
 						const stackResponse = await session.customRequest('stackTrace', {
 							threadId: thread.id,
@@ -146,12 +170,12 @@ export class DapDebugGateway implements DebugGateway {
 							frames: [],
 						};
 					}
-				})
+				}
 			);
 
 			return stackResults;
 		} catch (err) {
-			console.error('[DapDebugGateway] listCallStack failed:', err);
+			reportHostError('DapDebugGateway.listCallStack', err);
 			return [];
 		}
 	}
@@ -202,7 +226,7 @@ export class DapDebugGateway implements DebugGateway {
 			return { instructions };
 		} catch (err) {
 			const message = getDapErrorMessage(err);
-			console.error('[DapDebugGateway] readDisassembly failed:', err);
+			reportHostError('DapDebugGateway.readDisassembly', err);
 			return {
 				instructions: [],
 				error: message,
@@ -303,12 +327,20 @@ export class DapDebugGateway implements DebugGateway {
 	}
 
 	private findSession(sessionId: string): vscode.DebugSession | undefined {
-		// First check active session
-		if (vscode.debug.activeDebugSession?.id === sessionId) {
-			return vscode.debug.activeDebugSession;
-		}
-		// Fallback: could iterate all sessions if needed in future
-		return undefined;
+		return this.sessionResolver(sessionId);
 	}
 
+}
+
+function normalizeConcurrencyLimit(value: number | undefined): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) {
+		return DEFAULT_MAX_CONCURRENT_DAP_REQUESTS;
+	}
+	return Math.max(1, Math.floor(value));
+}
+
+function findActiveSession(sessionId: string): vscode.DebugSession | undefined {
+	return vscode.debug.activeDebugSession?.id === sessionId
+		? vscode.debug.activeDebugSession
+		: undefined;
 }
