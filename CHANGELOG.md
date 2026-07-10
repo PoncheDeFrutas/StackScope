@@ -6,6 +6,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-10
+
+### Changed
+
+- Serialized workspace persistence and separated Memory/Registers view state.
+- Bounded DAP request concurrency and ignored stale register refreshes.
+- Split host message routing by responsibility and added provider lifecycle coverage.
+
 ## [0.2.0] - 2026-07-10
 
 ### Changed
