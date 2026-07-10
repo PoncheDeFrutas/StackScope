@@ -6,7 +6,7 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
   <img src="docs/assets/stackscope.png" width="160" alt="StackScope logo" />
 </p>
 
-![Version](https://img.shields.io/badge/version-0.1.3-blue)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.110.0-007ACC)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6)
 ![React](https://img.shields.io/badge/React-18-61DAFB)

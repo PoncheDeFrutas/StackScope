@@ -6,6 +6,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-10
+
 ### Changed
 
 - Moved register inspection from the memory view into a dedicated Activity Bar view.
