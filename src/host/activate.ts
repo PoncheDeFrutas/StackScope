@@ -6,8 +6,10 @@ import {
 	createOpenMemoryViewInEditorCommand,
 	createOpenCallStackInEditorCommand,
 	createOpenDisassemblyInEditorCommand,
+	createFocusRegistersViewCommand,
 } from './commands/openMemoryViewCommand.js';
 import { MemoryViewProvider } from './providers/MemoryViewProvider.js';
+import { RegisterViewProvider } from './providers/RegisterViewProvider.js';
 
 let services: HostServices | null = null;
 
@@ -32,10 +34,23 @@ export function activate(context: vscode.ExtensionContext): void {
 		)
 	);
 
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			RegisterViewProvider.viewType,
+			services.registerViewProvider,
+			{
+				webviewOptions: {
+					retainContextWhenHidden: true,
+				},
+			}
+		)
+	);
+
 	// Register commands
 	context.subscriptions.push(
 		createOpenMemoryViewCommand(services.memoryViewProvider),
 		createFocusMemoryViewCommand(services.memoryViewProvider),
+		createFocusRegistersViewCommand(services.registerViewProvider),
 		createOpenMemoryViewInEditorCommand(services.editorTabService),
 		createOpenCallStackInEditorCommand(services.editorTabService),
 		createOpenDisassemblyInEditorCommand(services.editorTabService)
@@ -49,6 +64,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Register provider for cleanup
 	context.subscriptions.push({
 		dispose: () => services?.memoryViewProvider.dispose(),
+	});
+	context.subscriptions.push({
+		dispose: () => services?.registerViewProvider.dispose(),
 	});
 
 	context.subscriptions.push({

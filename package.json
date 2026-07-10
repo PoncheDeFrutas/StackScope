@@ -36,6 +36,11 @@
         "category": "StackScope"
       },
       {
+        "command": "stackscope.focusRegistersView",
+        "title": "Focus Registers View",
+        "category": "StackScope"
+      },
+      {
         "command": "stackscope.openMemoryViewInEditor",
         "title": "Open Memory View (Editor Tab)",
         "category": "StackScope"
@@ -60,6 +65,9 @@
           "command": "stackscope.focusMemoryView"
         },
         {
+          "command": "stackscope.focusRegistersView"
+        },
+        {
           "command": "stackscope.openMemoryViewInEditor"
         },
         {
@@ -71,6 +79,13 @@
       ]
     },
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "stackscope-registers",
+          "title": "StackScope",
+          "icon": "media/registers.svg"
+        }
+      ],
       "panel": [
         {
           "id": "stackscope-panel",
@@ -86,6 +101,14 @@
           "id": "stackscope.memoryView",
           "name": "Memory",
           "contextualTitle": "StackScope Memory"
+        }
+      ],
+      "stackscope-registers": [
+        {
+          "type": "webview",
+          "id": "stackscope.registersView",
+          "name": "Registers",
+          "contextualTitle": "StackScope Registers"
         }
       ]
     }

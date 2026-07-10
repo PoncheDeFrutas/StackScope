@@ -4,6 +4,7 @@ import { DapDebugGateway } from '../../debug/dap/DapDebugGateway.js';
 import { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 import { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
+import { RegisterViewProvider } from '../providers/RegisterViewProvider.js';
 import { PresetService } from '../services/PresetService.js';
 import { RegisterSetService } from '../services/RegisterSetService.js';
 import { StackSelectionService } from '../services/StackSelectionService.js';
@@ -24,6 +25,7 @@ export interface HostServices {
 	editorTabService: EditorTabService;
 	messageRouter: HostMessageRouter;
 	memoryViewProvider: MemoryViewProvider;
+	registerViewProvider: RegisterViewProvider;
 }
 
 /**
@@ -53,6 +55,7 @@ export function createHostServices(
 	);
 	editorTabService.setRouter(messageRouter);
 	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
+	const registerViewProvider = new RegisterViewProvider(extensionUri, messageRouter);
 
 	return {
 		sessionTracker,
@@ -65,5 +68,6 @@ export function createHostServices(
 		editorTabService,
 		messageRouter,
 		memoryViewProvider,
+		registerViewProvider,
 	};
 }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
+import type { RegisterViewProvider } from '../providers/RegisterViewProvider.js';
 import type { EditorTabService } from '../services/EditorTabService.js';
 
 /**
@@ -57,5 +58,16 @@ export function createFocusMemoryViewCommand(
 ): vscode.Disposable {
 	return vscode.commands.registerCommand('stackscope.focusMemoryView', () => {
 		memoryViewProvider.focus();
+	});
+}
+
+/**
+ * Creates and registers the command that focuses StackScope Registers.
+ */
+export function createFocusRegistersViewCommand(
+	registerViewProvider: RegisterViewProvider
+): vscode.Disposable {
+	return vscode.commands.registerCommand('stackscope.focusRegistersView', () => {
+		registerViewProvider.focus();
 	});
 }
