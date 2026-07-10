@@ -10,6 +10,7 @@ import {
 } from './commands/openMemoryViewCommand.js';
 import { MemoryViewProvider } from './providers/MemoryViewProvider.js';
 import { RegisterViewProvider } from './providers/RegisterViewProvider.js';
+import { disposeHostErrorReporter } from './services/HostErrorReporter.js';
 
 let services: HostServices | null = null;
 
@@ -72,6 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push({
 		dispose: () => services?.editorTabService.dispose(),
 	});
+	context.subscriptions.push({ dispose: disposeHostErrorReporter });
 
 	console.log('StackScope: Activated');
 }
