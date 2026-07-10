@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
 import {
 	getWebviewHtml,
 	type StackScopeWebviewKind,
@@ -12,6 +11,11 @@ export interface StackScopeWebviewViewOptions {
 	backgroundColor: string;
 }
 
+export interface WebviewMessageRouter {
+	attach(webview: vscode.Webview): void;
+	detach(webview?: vscode.Webview): void;
+}
+
 /**
  * Shared lifecycle for StackScope sidebar webviews.
  */
@@ -20,7 +24,7 @@ export class StackScopeWebviewViewProvider implements vscode.WebviewViewProvider
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
-		private readonly messageRouter: HostMessageRouter,
+		private readonly messageRouter: WebviewMessageRouter,
 		private readonly options: StackScopeWebviewViewOptions
 	) {}
 
