@@ -1,12 +1,10 @@
-import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 import { VirtualMemoryGrid, type MemorySelection } from './components/VirtualMemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Toolbar } from './components/Toolbar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
-import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
-import { RegisterSetEditor } from './components/RegisterSetEditor.js';
 import { usePagedMemory } from './hooks/usePagedMemory.js';
 import {
 	captureBaselineFromPages,
@@ -18,9 +16,6 @@ import type {
 	SessionSnapshot,
 	DocumentSnapshot,
 	PresetSnapshot,
-	RegisterSetSnapshot,
-	RegisterValueSnapshot,
-	RegisterItemSnapshot,
 } from '../protocol/methods.js';
 import type { MemoryViewConfig } from '../domain/config/MemoryViewConfig.js';
 import { DEFAULT_CONFIG } from '../domain/config/MemoryViewConfig.js';
@@ -33,10 +28,6 @@ type AppState =
 	| { phase: 'ready'; session: SessionSnapshot; document: DocumentSnapshot }
 	| { phase: 'error'; session: SessionSnapshot; document: DocumentSnapshot | null; error: string };
 
-const DEFAULT_REGISTER_PANEL_WIDTH = 320;
-const MIN_REGISTER_PANEL_WIDTH = 240;
-const MIN_REGISTER_PANEL_WIDTH_FALLBACK = 180;
-const MAX_REGISTER_PANEL_RATIO = 0.45;
 const VIEW_STATE_SAVE_DEBOUNCE_MS = 200;
 
 export function App(): JSX.Element {
@@ -47,19 +38,7 @@ export function App(): JSX.Element {
 	const [showSettings, setShowSettings] = useState(false);
 	const [currentTarget, setCurrentTarget] = useState('');
 
-	// Register state
-	const [registerSets, setRegisterSets] = useState<RegisterSetSnapshot[]>([]);
-	const [selectedRegisterSetId, setSelectedRegisterSetId] = useState<string>('builtin-core');
-	const [registerValues, setRegisterValues] = useState<RegisterValueSnapshot[]>([]);
-	const [registersStale, setRegistersStale] = useState(false);
-	const [registersLoading, setRegistersLoading] = useState(false);
-	const [registerValueFormat, setRegisterValueFormat] = useState<RegisterValueFormat>('hex');
-	const [showRegisterPanel, setShowRegisterPanel] = useState(true);
-	const [registerPanelWidth, setRegisterPanelWidth] = useState(DEFAULT_REGISTER_PANEL_WIDTH);
-	const [isResizingRegisterPanel, setIsResizingRegisterPanel] = useState(false);
-	const [editingRegisterSet, setEditingRegisterSet] = useState<RegisterSetSnapshot | null | 'new'>(null);
 	const [viewStateReady, setViewStateReady] = useState(false);
-	const splitContainerRef = useRef<HTMLDivElement>(null);
 	const configRef = useRef(config);
 	const pendingRestoreTargetRef = useRef<string | null>(null);
 	const restoreAttemptSessionIdRef = useRef<string | null>(null);
@@ -76,7 +55,6 @@ export function App(): JSX.Element {
 
 	// Track if we need to refresh on next stopped event
 	const pendingRefreshRef = useRef(false);
-	const pendingRegisterRefreshRef = useRef(false);
 	const [stackSelectionVersion, setStackSelectionVersion] = useState(0);
 
 	useEffect(() => {
@@ -99,7 +77,6 @@ export function App(): JSX.Element {
 					if (prev.phase === 'ready') {
 						// Trigger silent refresh of loaded pages
 						pendingRefreshRef.current = true;
-						pendingRegisterRefreshRef.current = true;
 						return { ...prev, session: payload.session };
 					}
 					if (prev.phase === 'error' && prev.document) {
@@ -110,7 +87,6 @@ export function App(): JSX.Element {
 						};
 					}
 					if (prev.phase === 'no-document') {
-						pendingRegisterRefreshRef.current = true;
 						return { ...prev, session: payload.session };
 					}
 				}
@@ -119,8 +95,6 @@ export function App(): JSX.Element {
 				if (payload.session.status === 'running' && prev.phase === 'ready') {
 					baselineRef.current = captureBaselineFromPages(pagedMemory.state.pages);
 					setChangedBytes(new Map());
-					// Mark registers as stale when running
-					setRegistersStale(true);
 				}
 
 				// Keep document if we have one, otherwise go to no-document
@@ -187,23 +161,6 @@ export function App(): JSX.Element {
 	}, []);
 
 	useEffect(() => {
-		const container = splitContainerRef.current;
-		if (!container) {
-			return;
-		}
-
-		const clampWidth = () => {
-			setRegisterPanelWidth((prev) => clampRegisterPanelWidth(prev, container.clientWidth));
-		};
-
-		clampWidth();
-
-		const observer = new ResizeObserver(clampWidth);
-		observer.observe(container);
-		return () => observer.disconnect();
-	}, []);
-
-	useEffect(() => {
 		if (!viewStateReady) {
 			return;
 		}
@@ -213,9 +170,9 @@ export function App(): JSX.Element {
 				currentTarget,
 				config,
 				showSettings,
-				showRegisterPanel,
-				registerPanelWidth,
-				registerValueFormat,
+				showRegisterPanel: true,
+				registerPanelWidth: 320,
+				registerValueFormat: 'hex',
 			}).catch((err) => {
 				console.error('Failed to save view state:', err);
 			});
@@ -227,9 +184,6 @@ export function App(): JSX.Element {
 		currentTarget,
 		config,
 		showSettings,
-		showRegisterPanel,
-		registerPanelWidth,
-		registerValueFormat,
 	]);
 
 	useEffect(() => {
@@ -246,15 +200,6 @@ export function App(): JSX.Element {
 		}
 	}, [state]);
 
-	// Handle pending register refresh when stopped
-	useEffect(() => {
-		const sessionStatus = 'session' in state ? state.session.status : 'none';
-		if (pendingRegisterRefreshRef.current && sessionStatus === 'stopped') {
-			pendingRegisterRefreshRef.current = false;
-			loadRegisters(selectedRegisterSetId);
-		}
-	}, [state, selectedRegisterSetId]);
-
 	useEffect(() => {
 		const sessionStatus = 'session' in state ? state.session.status : 'none';
 		if (
@@ -269,10 +214,8 @@ export function App(): JSX.Element {
 
 		if (state.phase === 'ready') {
 			void handleRefreshInternal();
-		} else if (state.phase === 'no-document') {
-			void loadRegisters(selectedRegisterSetId);
 		}
-	}, [stackSelectionVersion, state, selectedRegisterSetId]);
+	}, [stackSelectionVersion, state]);
 
 	async function init(): Promise<void> {
 		try {
@@ -284,14 +227,8 @@ export function App(): JSX.Element {
 			// Store presets from init
 			setPresets(result.presets);
 
-			// Store register sets from init
-			setRegisterSets(result.registerSets);
-			setSelectedRegisterSetId(result.selectedRegisterSetId);
 			setConfig(restoredConfig);
 			setShowSettings(restoredViewState?.showSettings ?? false);
-			setShowRegisterPanel(restoredViewState?.showRegisterPanel ?? true);
-			setRegisterPanelWidth(restoredViewState?.registerPanelWidth ?? DEFAULT_REGISTER_PANEL_WIDTH);
-			setRegisterValueFormat(restoredViewState?.registerValueFormat ?? 'hex');
 			setCurrentTarget(restoredTarget);
 
 			if (restoredTarget) {
@@ -306,10 +243,6 @@ export function App(): JSX.Element {
 
 			if (!result.activeDocument) {
 				setState({ phase: 'no-document', session: result.session });
-				// Load registers if session is stopped
-				if (result.session.status === 'stopped') {
-					loadRegisters(result.selectedRegisterSetId);
-				}
 				return;
 			}
 
@@ -328,10 +261,6 @@ export function App(): JSX.Element {
 				document: result.activeDocument,
 			});
 
-			// Load registers if session is stopped
-			if (result.session.status === 'stopped') {
-				loadRegisters(result.selectedRegisterSetId);
-			}
 		} catch (err) {
 			setState({
 				phase: 'error',
@@ -339,21 +268,6 @@ export function App(): JSX.Element {
 				document: null,
 				error: err instanceof Error ? err.message : 'Failed to initialize',
 			});
-		}
-	}
-
-	/** Loads register values for the selected set */
-	async function loadRegisters(setId: string): Promise<void> {
-		setRegistersLoading(true);
-		try {
-			const result = await HostClient.readRegisters(setId);
-			setRegisterValues(result.values);
-			setRegistersStale(false);
-		} catch (err) {
-			console.error('Failed to load registers:', err);
-			setRegistersStale(true);
-		} finally {
-			setRegistersLoading(false);
 		}
 	}
 
@@ -371,8 +285,6 @@ export function App(): JSX.Element {
 			)
 		);
 
-		// Also refresh registers
-		loadRegisters(selectedRegisterSetId);
 	}
 
 	const handleOpenDocument = useCallback(async (
@@ -588,141 +500,6 @@ export function App(): JSX.Element {
 		pagedMemory.loadRange(startOffset, endOffset);
 	}, [pagedMemory]);
 
-	// ─────────────────────────────────────────────────────────────────────────
-	// Register handlers
-	// ─────────────────────────────────────────────────────────────────────────
-
-	const handleSelectRegisterSet = useCallback(async (setId: string) => {
-		setSelectedRegisterSetId(setId);
-		await HostClient.selectRegisterSet(setId);
-		const sessionStatus = 'session' in state ? state.session.status : 'none';
-		if (sessionStatus === 'stopped') {
-			loadRegisters(setId);
-		} else {
-			setRegistersStale(true);
-		}
-	}, [state]);
-
-	const handleRefreshRegisters = useCallback(() => {
-		const sessionStatus = 'session' in state ? state.session.status : 'none';
-		if (sessionStatus === 'stopped') {
-			loadRegisters(selectedRegisterSetId);
-		} else {
-			setRegistersStale(true);
-		}
-	}, [state, selectedRegisterSetId]);
-
-	const handleEditRegisterSet = useCallback((set: RegisterSetSnapshot) => {
-		setEditingRegisterSet(set);
-	}, []);
-
-	const handleCreateRegisterSet = useCallback(() => {
-		setEditingRegisterSet('new');
-	}, []);
-
-	const handleDeleteRegisterSet = useCallback(async (setId: string) => {
-		try {
-			await HostClient.deleteRegisterSet(setId);
-			const remaining = registerSets.filter((s) => s.id !== setId);
-			setRegisterSets(remaining);
-			// If deleted set was selected, switch to first available
-			if (selectedRegisterSetId === setId) {
-				const firstSet = remaining[0];
-				if (firstSet) {
-					setSelectedRegisterSetId(firstSet.id);
-					await HostClient.selectRegisterSet(firstSet.id);
-					const sessionStatus = 'session' in state ? state.session.status : 'none';
-					if (sessionStatus === 'stopped') {
-						loadRegisters(firstSet.id);
-					} else {
-						setRegistersStale(true);
-					}
-				}
-			}
-		} catch (err) {
-			console.error('Failed to delete register set:', err);
-		}
-	}, [selectedRegisterSetId, registerSets, state]);
-
-	const handleSaveRegisterSet = useCallback(
-		async (name: string, registers: RegisterItemSnapshot[], description?: string) => {
-			try {
-				if (editingRegisterSet === 'new') {
-					const result = await HostClient.saveRegisterSet(name, registers, description);
-					setRegisterSets((prev) => [...prev, result.registerSet]);
-					setSelectedRegisterSetId(result.registerSet.id);
-					await HostClient.selectRegisterSet(result.registerSet.id);
-					const sessionStatus = 'session' in state ? state.session.status : 'none';
-					if (sessionStatus === 'stopped') {
-						loadRegisters(result.registerSet.id);
-					} else {
-						setRegistersStale(true);
-					}
-				} else if (editingRegisterSet) {
-					const result = await HostClient.updateRegisterSet(editingRegisterSet.id, {
-						name,
-						registers,
-						description,
-					});
-					if (result.registerSet) {
-						setRegisterSets((prev) =>
-							prev.map((s) => (s.id === result.registerSet!.id ? result.registerSet! : s))
-						);
-						const sessionStatus = 'session' in state ? state.session.status : 'none';
-						if (sessionStatus === 'stopped' && selectedRegisterSetId === editingRegisterSet.id) {
-							loadRegisters(editingRegisterSet.id);
-						} else {
-							setRegistersStale(true);
-						}
-					}
-				}
-				setEditingRegisterSet(null);
-			} catch (err) {
-				console.error('Failed to save register set:', err);
-			}
-		},
-		[editingRegisterSet, state, selectedRegisterSetId]
-	);
-
-	const handleCancelRegisterSetEditor = useCallback(() => {
-		setEditingRegisterSet(null);
-	}, []);
-
-	const handleToggleRegisterPanel = useCallback(() => {
-		setShowRegisterPanel((prev) => !prev);
-	}, []);
-
-	const handleRegisterValueFormatChange = useCallback((format: RegisterValueFormat) => {
-		setRegisterValueFormat(format);
-	}, []);
-
-	const handleRegisterResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-		const container = splitContainerRef.current;
-		if (!container) {
-			return;
-		}
-
-		event.preventDefault();
-		setIsResizingRegisterPanel(true);
-
-		const handlePointerMove = (moveEvent: PointerEvent) => {
-			const rect = container.getBoundingClientRect();
-			const nextWidth = rect.right - moveEvent.clientX;
-			setRegisterPanelWidth(clampRegisterPanelWidth(nextWidth, rect.width));
-		};
-
-		const handlePointerEnd = () => {
-			setIsResizingRegisterPanel(false);
-			window.removeEventListener('pointermove', handlePointerMove);
-			window.removeEventListener('pointerup', handlePointerEnd);
-			window.removeEventListener('pointercancel', handlePointerEnd);
-		};
-
-		window.addEventListener('pointermove', handlePointerMove);
-		window.addEventListener('pointerup', handlePointerEnd);
-		window.addEventListener('pointercancel', handlePointerEnd);
-	}, []);
-
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 	const changedByteCount = getChangedByteCount(changedBytes);
@@ -761,15 +538,7 @@ export function App(): JSX.Element {
 					disabled={sessionStatus !== 'stopped'}
 				/>
 			)}
-			<div
-				ref={splitContainerRef}
-				style={{
-					...styles.mainContent,
-					cursor: isResizingRegisterPanel ? 'col-resize' : 'default',
-					userSelect: isResizingRegisterPanel ? 'none' : 'auto',
-				}}
-			>
-				{/* Memory content */}
+			<div style={styles.mainContent}>
 				<div style={styles.content}>
 					{renderContent(
 						state,
@@ -781,58 +550,6 @@ export function App(): JSX.Element {
 						setMemorySelection
 					)}
 				</div>
-				{showRegisterPanel ? (
-					<>
-						<div
-							style={styles.registerResizeHandle}
-							onPointerDown={handleRegisterResizeStart}
-							role="separator"
-							aria-orientation="vertical"
-							aria-label="Resize register panel"
-						/>
-						<div
-							style={{
-								...styles.registerPanelContainer,
-								width: registerPanelWidth,
-							}}
-						>
-							<div style={styles.registerPanelHeader}>
-								<span style={styles.registerPanelTitle}>Registers</span>
-								<button
-									onClick={handleToggleRegisterPanel}
-									style={styles.collapseButton}
-									title="Hide registers"
-								>
-									<ChevronRightIcon />
-								</button>
-							</div>
-							<RegisterPanel
-								registerSets={registerSets}
-								selectedSetId={selectedRegisterSetId}
-								registerValues={registerValues}
-								isStale={registersStale}
-								isLoading={registersLoading}
-								sessionStatus={sessionStatus}
-								valueFormat={registerValueFormat}
-								onSelectSet={handleSelectRegisterSet}
-								onValueFormatChange={handleRegisterValueFormatChange}
-								onRefresh={handleRefreshRegisters}
-								onEditSet={handleEditRegisterSet}
-								onCreateSet={handleCreateRegisterSet}
-								onDeleteSet={handleDeleteRegisterSet}
-							/>
-						</div>
-					</>
-				) : (
-					<button
-						onClick={handleToggleRegisterPanel}
-						style={styles.expandSideTab}
-						title="Show registers"
-					>
-						<ChevronLeftIcon />
-						<span style={styles.expandSideTabLabel}>Registers</span>
-					</button>
-				)}
 			</div>
 			<StatusBar
 				status={sessionStatus}
@@ -841,14 +558,6 @@ export function App(): JSX.Element {
 				error={state.phase === 'error' ? state.error : null}
 				changedByteCount={changedByteCount}
 			/>
-			{/* Register set editor modal */}
-			{editingRegisterSet !== null && (
-				<RegisterSetEditor
-					editingSet={editingRegisterSet === 'new' ? null : editingRegisterSet}
-					onSave={handleSaveRegisterSet}
-					onCancel={handleCancelRegisterSetEditor}
-				/>
-			)}
 		</div>
 	);
 }
@@ -981,22 +690,6 @@ function formatDumpAddress(address: bigint): string {
 	return '0x' + address.toString(16).padStart(16, '0').toUpperCase();
 }
 
-function ChevronLeftIcon(): JSX.Element {
-	return (
-		<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-			<path d="M9.5 13L5 8.5l4.5-4.5.7.7L6.4 8.5l3.8 3.8-.7.7z" />
-		</svg>
-	);
-}
-
-function ChevronRightIcon(): JSX.Element {
-	return (
-		<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-			<path d="M10.5 8L6 3.5l.7-.7 5 5-5 5-.7-.7L10.5 8z" />
-		</svg>
-	);
-}
-
 const styles: Record<string, React.CSSProperties> = {
 	container: {
 		display: 'flex',
@@ -1009,68 +702,6 @@ const styles: Record<string, React.CSSProperties> = {
 		flexDirection: 'row',
 		overflow: 'hidden',
 		minHeight: 0,
-	},
-	registerPanelContainer: {
-		display: 'flex',
-		flexDirection: 'column',
-		minWidth: 0,
-		minHeight: 0,
-		borderLeft: '1px solid var(--vscode-widget-border)',
-		backgroundColor: 'var(--vscode-editor-background)',
-	},
-	registerPanelHeader: {
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		padding: '4px 8px',
-		backgroundColor: 'var(--vscode-sideBarSectionHeader-background)',
-		borderBottom: '1px solid var(--vscode-widget-border)',
-	},
-	registerResizeHandle: {
-		width: '6px',
-		cursor: 'col-resize',
-		backgroundColor: 'transparent',
-		borderLeft: '1px solid transparent',
-		borderRight: '1px solid transparent',
-	},
-	registerPanelTitle: {
-		fontSize: '11px',
-		fontWeight: 600,
-		textTransform: 'uppercase' as const,
-		color: 'var(--vscode-sideBarSectionHeader-foreground)',
-	},
-	collapseButton: {
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		width: '20px',
-		height: '20px',
-		padding: 0,
-		border: 'none',
-		backgroundColor: 'transparent',
-		color: 'var(--vscode-foreground)',
-		cursor: 'pointer',
-	},
-	expandSideTab: {
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		gap: '4px',
-		width: '30px',
-		padding: '8px 4px',
-		border: 'none',
-		borderLeft: '1px solid var(--vscode-widget-border)',
-		backgroundColor: 'var(--vscode-sideBarSectionHeader-background)',
-		color: 'var(--vscode-sideBarSectionHeader-foreground)',
-		cursor: 'pointer',
-		fontSize: '11px',
-		fontWeight: 600,
-		textTransform: 'uppercase' as const,
-		writingMode: 'vertical-rl',
-		textOrientation: 'mixed',
-	},
-	expandSideTabLabel: {
-		letterSpacing: '0.08em',
 	},
 	content: {
 		flex: 1,
@@ -1088,9 +719,3 @@ const styles: Record<string, React.CSSProperties> = {
 		lineHeight: 1.6,
 	},
 };
-
-function clampRegisterPanelWidth(width: number, containerWidth: number): number {
-	const maxWidth = Math.max(MIN_REGISTER_PANEL_WIDTH_FALLBACK, Math.floor(containerWidth * MAX_REGISTER_PANEL_RATIO));
-	const minWidth = Math.min(MIN_REGISTER_PANEL_WIDTH, maxWidth);
-	return Math.min(Math.max(width, minWidth), maxWidth);
-}

@@ -1,7 +1,12 @@
 import * as vscode from 'vscode';
 import type { DebugNavigationMode } from '../../protocol/methods.js';
 
-export type StackScopeWebviewKind = 'memory' | 'call-stack' | 'disassembly' | 'debug-nav';
+export type StackScopeWebviewKind =
+	| 'memory'
+	| 'registers'
+	| 'call-stack'
+	| 'disassembly'
+	| 'debug-nav';
 
 export function getWebviewHtml(
 	webview: vscode.Webview,
