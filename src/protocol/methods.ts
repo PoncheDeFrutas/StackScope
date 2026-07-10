@@ -335,6 +335,14 @@ export interface SaveViewStateResult {
 	success: boolean;
 }
 
+export interface SaveRegisterViewStateParams {
+	registerValueFormat: ViewStateSnapshot['registerValueFormat'];
+}
+
+export interface SaveRegisterViewStateResult {
+	success: boolean;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Call stack methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -393,6 +401,7 @@ export type MethodName =
 	| 'selectRegisterSet'
 	| 'readRegisters'
 	| 'saveViewState'
+	| 'saveRegisterViewState'
 	| 'listCallStack'
 	| 'selectStackFrame'
 	| 'getDisassembly';
@@ -418,6 +427,10 @@ export interface MethodMap {
 	selectRegisterSet: { params: SelectRegisterSetParams; result: SelectRegisterSetResult };
 	readRegisters: { params: ReadRegistersParams; result: ReadRegistersResult };
 	saveViewState: { params: SaveViewStateParams; result: SaveViewStateResult };
+	saveRegisterViewState: {
+		params: SaveRegisterViewStateParams;
+		result: SaveRegisterViewStateResult;
+	};
 	listCallStack: { params: ListCallStackParams; result: ListCallStackResult };
 	selectStackFrame: { params: SelectStackFrameParams; result: SelectStackFrameResult };
 	getDisassembly: { params: GetDisassemblyParams; result: GetDisassemblyResult };

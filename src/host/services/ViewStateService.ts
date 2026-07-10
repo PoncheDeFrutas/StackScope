@@ -33,8 +33,47 @@ export class ViewStateService {
 	}
 
 	save(viewState: ViewStateSnapshot): Thenable<void> {
-		return this.context.workspaceState.update(STORAGE_KEY, sanitizeViewState(viewState));
+		return this.context.workspaceState.update(
+			STORAGE_KEY,
+			mergeMemoryViewState(this.get(), viewState)
+		);
 	}
+
+	saveRegisterViewState(
+		registerValueFormat: ViewStateSnapshot['registerValueFormat']
+	): Thenable<void> {
+		return this.context.workspaceState.update(
+			STORAGE_KEY,
+			mergeRegisterValueFormat(this.get(), registerValueFormat)
+		);
+	}
+}
+
+export function mergeMemoryViewState(
+	current: ViewStateSnapshot | null,
+	viewState: ViewStateSnapshot
+): ViewStateSnapshot {
+	const next = sanitizeViewState(viewState)!;
+	if (!current) {
+		return next;
+	}
+	return {
+		...next,
+		showRegisterPanel: current.showRegisterPanel,
+		registerPanelWidth: current.registerPanelWidth,
+		registerValueFormat: current.registerValueFormat,
+	};
+}
+
+export function mergeRegisterValueFormat(
+	current: ViewStateSnapshot | null,
+	registerValueFormat: unknown
+): ViewStateSnapshot {
+	const base = current ?? sanitizeViewState({})!;
+	return {
+		...base,
+		registerValueFormat: sanitizeRegisterValueFormat(registerValueFormat),
+	};
 }
 
 export function sanitizeViewState(value: unknown): ViewStateSnapshot | null {

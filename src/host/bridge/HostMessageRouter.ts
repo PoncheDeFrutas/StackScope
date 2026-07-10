@@ -313,6 +313,13 @@ export class HostMessageRouter {
 			return { success: true };
 		});
 
+		this.handlers.set('saveRegisterViewState', async (params) => {
+			const { registerValueFormat } =
+				params as MethodMap['saveRegisterViewState']['params'];
+			await this.viewStateService.saveRegisterViewState(registerValueFormat);
+			return { success: true };
+		});
+
 		this.handlers.set('listCallStack', async () => this.getCallStackSnapshot());
 
 		this.handlers.set('selectStackFrame', async (params) => {

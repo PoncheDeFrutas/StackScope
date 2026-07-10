@@ -1,6 +1,10 @@
 import * as assert from 'assert';
 import { DEFAULT_CONFIG } from '../domain/config/MemoryViewConfig.js';
-import { sanitizeViewState } from '../host/services/ViewStateService.js';
+import {
+	mergeRegisterValueFormat,
+	mergeMemoryViewState,
+	sanitizeViewState,
+} from '../host/services/ViewStateService.js';
 
 suite('ViewStateService', () => {
 	test('sanitizeViewState returns null for non-object values', () => {
@@ -70,5 +74,51 @@ suite('ViewStateService', () => {
 			registerPanelWidth: 320,
 			registerValueFormat: 'hex',
 		});
+	});
+
+	test('mergeRegisterValueFormat changes only register format', () => {
+		const current = sanitizeViewState({
+			currentTarget: '$sp',
+			config: DEFAULT_CONFIG,
+			showSettings: true,
+			showRegisterPanel: false,
+			registerPanelWidth: 400,
+			registerValueFormat: 'hex',
+		});
+
+		const result = mergeRegisterValueFormat(current, 'dec');
+
+		assert.strictEqual(result.currentTarget, '$sp');
+		assert.strictEqual(result.showSettings, true);
+		assert.strictEqual(result.showRegisterPanel, false);
+		assert.strictEqual(result.registerPanelWidth, 400);
+		assert.strictEqual(result.registerValueFormat, 'dec');
+	});
+
+	test('mergeMemoryViewState preserves register state from separate view', () => {
+		const current = sanitizeViewState({
+			currentTarget: '$sp',
+			config: DEFAULT_CONFIG,
+			showSettings: false,
+			showRegisterPanel: false,
+			registerPanelWidth: 400,
+			registerValueFormat: 'dec',
+		});
+		const next = {
+			currentTarget: '$pc',
+			config: DEFAULT_CONFIG,
+			showSettings: true,
+			showRegisterPanel: true,
+			registerPanelWidth: 320,
+			registerValueFormat: 'hex' as const,
+		};
+
+		const result = mergeMemoryViewState(current, next);
+
+		assert.strictEqual(result.currentTarget, '$pc');
+		assert.strictEqual(result.showSettings, true);
+		assert.strictEqual(result.showRegisterPanel, false);
+		assert.strictEqual(result.registerPanelWidth, 400);
+		assert.strictEqual(result.registerValueFormat, 'dec');
 	});
 });

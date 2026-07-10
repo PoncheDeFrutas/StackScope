@@ -19,6 +19,7 @@ import type {
 	RegisterItemSnapshot,
 	ViewStateSnapshot,
 	SaveViewStateResult,
+	SaveRegisterViewStateResult,
 	ListCallStackResult,
 	SelectStackFrameResult,
 	GetDisassemblyResult,
@@ -177,6 +178,15 @@ export const HostClient = {
 	 */
 	async saveViewState(viewState: ViewStateSnapshot): Promise<SaveViewStateResult> {
 		return messageBus.request('saveViewState', { viewState });
+	},
+
+	/**
+	 * Persists register-view state without replacing memory-view state.
+	 */
+	async saveRegisterViewState(
+		registerValueFormat: ViewStateSnapshot['registerValueFormat']
+	): Promise<SaveRegisterViewStateResult> {
+		return messageBus.request('saveRegisterViewState', { registerValueFormat });
 	},
 
 	/**
