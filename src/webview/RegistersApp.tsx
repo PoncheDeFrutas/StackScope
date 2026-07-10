@@ -7,6 +7,7 @@ import type {
 } from '../protocol/methods.js';
 import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
+import { RegisterLoadGeneration } from './hooks/RegisterLoadGeneration.js';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 
@@ -23,6 +24,18 @@ export function RegistersApp(): JSX.Element {
 	const [editingSet, setEditingSet] = useState<RegisterSetSnapshot | null | 'new'>(null);
 	const selectedSetIdRef = useRef(selectedSetId);
 	const sessionRef = useRef(session);
+	const mountedRef = useRef(false);
+	const initializeGenerationRef = useRef(new RegisterLoadGeneration());
+	const loadGenerationRef = useRef(new RegisterLoadGeneration());
+
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			initializeGenerationRef.current.invalidate();
+			loadGenerationRef.current.invalidate();
+		};
+	}, []);
 
 	useEffect(() => {
 		selectedSetIdRef.current = selectedSetId;
@@ -33,22 +46,37 @@ export function RegistersApp(): JSX.Element {
 	}, [session]);
 
 	const loadRegisters = useCallback(async (setId: string): Promise<void> => {
+		const generation = loadGenerationRef.current.begin();
 		setIsLoading(true);
 		try {
 			const result = await HostClient.readRegisters(setId);
+			if (!mountedRef.current || !loadGenerationRef.current.isCurrent(generation)) {
+				return;
+			}
 			setRegisterValues(result.values);
 			setIsStale(false);
 		} catch (error) {
+			if (!mountedRef.current || !loadGenerationRef.current.isCurrent(generation)) {
+				return;
+			}
 			console.error('Failed to load registers:', error);
 			setIsStale(true);
 		} finally {
-			setIsLoading(false);
+			if (mountedRef.current && loadGenerationRef.current.isCurrent(generation)) {
+				setIsLoading(false);
+			}
 		}
 	}, []);
 
 	const initialize = useCallback(async (): Promise<void> => {
+		const generation = initializeGenerationRef.current.begin();
 		try {
 			const result = await HostClient.init();
+			if (!mountedRef.current || !initializeGenerationRef.current.isCurrent(generation)) {
+				return;
+			}
+			sessionRef.current = result.session;
+			selectedSetIdRef.current = result.selectedRegisterSetId;
 			setSession(result.session);
 			setRegisterSets(result.registerSets);
 			setSelectedSetId(result.selectedRegisterSetId);
@@ -57,6 +85,9 @@ export function RegistersApp(): JSX.Element {
 				await loadRegisters(result.selectedRegisterSetId);
 			}
 		} catch (error) {
+			if (!mountedRef.current || !initializeGenerationRef.current.isCurrent(generation)) {
+				return;
+			}
 			console.error('Failed to initialize registers:', error);
 			setIsStale(true);
 		}
@@ -65,10 +96,14 @@ export function RegistersApp(): JSX.Element {
 	useEffect(() => {
 		void initialize();
 		const unsubscribeSession = messageBus.on('sessionChanged', (payload) => {
+			initializeGenerationRef.current.invalidate();
+			sessionRef.current = payload.session;
 			setSession(payload.session);
 			if (payload.session.status === 'stopped') {
 				void loadRegisters(selectedSetIdRef.current);
 			} else {
+				loadGenerationRef.current.invalidate();
+				setIsLoading(false);
 				setIsStale(true);
 			}
 		});
@@ -86,6 +121,8 @@ export function RegistersApp(): JSX.Element {
 
 	const handleSelectSet = useCallback(
 		async (setId: string) => {
+			loadGenerationRef.current.invalidate();
+			selectedSetIdRef.current = setId;
 			setSelectedSetId(setId);
 			try {
 				await HostClient.selectRegisterSet(setId);
