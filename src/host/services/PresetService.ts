@@ -6,6 +6,8 @@ import {
 	isBuiltinPreset,
 	isQuickRegisterTarget,
 } from '../../domain/presets/MemoryPreset.js';
+import { SequentialTaskQueue } from '../../shared/SequentialTaskQueue.js';
+import { reportHostError } from './HostErrorReporter.js';
 
 const STORAGE_KEY = 'stackscope.presets';
 
@@ -22,6 +24,7 @@ function generatePresetId(): string {
  */
 export class PresetService {
 	private userPresets: MemoryPreset[] = [];
+	private readonly writeQueue = new SequentialTaskQueue();
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.loadFromStorage();
@@ -133,7 +136,12 @@ export class PresetService {
 	}
 
 	private saveToStorage(): void {
-		this.context.workspaceState.update(STORAGE_KEY, this.userPresets);
+		const snapshot = [...this.userPresets];
+		void this.writeQueue.enqueue(() =>
+			this.context.workspaceState.update(STORAGE_KEY, snapshot)
+		).catch((error) => {
+			reportHostError('PresetService.saveToStorage', error);
+		});
 	}
 
 	private findUserPresetByNameTarget(name: string, target: string): MemoryPreset | undefined {

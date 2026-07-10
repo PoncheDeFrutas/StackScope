@@ -6,6 +6,8 @@ import {
 	BUILTIN_REGISTER_SETS,
 	isBuiltinRegisterSet,
 } from '../../domain/registers/RegisterSet.js';
+import { SequentialTaskQueue } from '../../shared/SequentialTaskQueue.js';
+import { reportHostError } from './HostErrorReporter.js';
 
 const STORAGE_KEY = 'stackscope.registerSets';
 const SELECTED_SET_KEY = 'stackscope.selectedRegisterSet';
@@ -24,6 +26,7 @@ function generateSetId(): string {
 export class RegisterSetService {
 	private userSets: RegisterSet[] = [];
 	private selectedSetId: string = BUILTIN_REGISTER_SETS[0].id;
+	private readonly writeQueue = new SequentialTaskQueue();
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.loadFromStorage();
@@ -183,10 +186,20 @@ export class RegisterSetService {
 	}
 
 	private saveToStorage(): void {
-		this.context.workspaceState.update(STORAGE_KEY, this.userSets);
+		const snapshot = [...this.userSets];
+		void this.writeQueue.enqueue(() =>
+			this.context.workspaceState.update(STORAGE_KEY, snapshot)
+		).catch((error) => {
+			reportHostError('RegisterSetService.saveToStorage', error);
+		});
 	}
 
 	private saveSelectedToStorage(): void {
-		this.context.workspaceState.update(SELECTED_SET_KEY, this.selectedSetId);
+		const selectedSetId = this.selectedSetId;
+		void this.writeQueue.enqueue(() =>
+			this.context.workspaceState.update(SELECTED_SET_KEY, selectedSetId)
+		).catch((error) => {
+			reportHostError('RegisterSetService.saveSelectedToStorage', error);
+		});
 	}
 }

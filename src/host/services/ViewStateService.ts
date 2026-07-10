@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import type { ViewStateSnapshot } from '../../protocol/methods.js';
+import type {
+	MemoryViewState,
+	RegisterViewState,
+	ViewStateSnapshot,
+} from '../../protocol/methods.js';
+import { SequentialTaskQueue } from '../../shared/SequentialTaskQueue.js';
 import {
 	DEFAULT_CONFIG,
 	MAX_TOTAL_SIZE,
@@ -25,6 +30,8 @@ const VALID_REGISTER_VALUE_FORMATS = ['hex', 'dec', 'oct', 'bin', 'raw'] as cons
  * Service for persisting webview UI state in workspace storage.
  */
 export class ViewStateService {
+	private readonly writeQueue = new SequentialTaskQueue();
+
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
 	get(): ViewStateSnapshot | null {
@@ -32,36 +39,36 @@ export class ViewStateService {
 		return sanitizeViewState(stored);
 	}
 
-	save(viewState: ViewStateSnapshot): Thenable<void> {
-		return this.context.workspaceState.update(
-			STORAGE_KEY,
-			mergeMemoryViewState(this.get(), viewState)
-		);
+	save(viewState: MemoryViewState): Thenable<void> {
+		return this.enqueueUpdate((current) => mergeMemoryViewState(current, viewState));
 	}
 
 	saveRegisterViewState(
-		registerValueFormat: ViewStateSnapshot['registerValueFormat']
+		registerValueFormat: RegisterViewState['registerValueFormat']
 	): Thenable<void> {
-		return this.context.workspaceState.update(
-			STORAGE_KEY,
-			mergeRegisterValueFormat(this.get(), registerValueFormat)
+		return this.enqueueUpdate((current) =>
+			mergeRegisterValueFormat(current, registerValueFormat)
+		);
+	}
+
+	private enqueueUpdate(
+		merge: (current: ViewStateSnapshot | null) => ViewStateSnapshot
+	): Thenable<void> {
+		return this.writeQueue.enqueue(() =>
+			this.context.workspaceState.update(STORAGE_KEY, merge(this.get()))
 		);
 	}
 }
 
 export function mergeMemoryViewState(
 	current: ViewStateSnapshot | null,
-	viewState: ViewStateSnapshot
+	viewState: MemoryViewState
 ): ViewStateSnapshot {
-	const next = sanitizeViewState(viewState)!;
-	if (!current) {
-		return next;
-	}
+	const next = sanitizeMemoryViewState(viewState) ?? createDefaultViewState();
+	const base = current ?? createDefaultViewState();
 	return {
+		...base,
 		...next,
-		showRegisterPanel: current.showRegisterPanel,
-		registerPanelWidth: current.registerPanelWidth,
-		registerValueFormat: current.registerValueFormat,
 	};
 }
 
@@ -69,7 +76,7 @@ export function mergeRegisterValueFormat(
 	current: ViewStateSnapshot | null,
 	registerValueFormat: unknown
 ): ViewStateSnapshot {
-	const base = current ?? sanitizeViewState({})!;
+	const base = current ?? createDefaultViewState();
 	return {
 		...base,
 		registerValueFormat: sanitizeRegisterValueFormat(registerValueFormat),
@@ -77,17 +84,38 @@ export function mergeRegisterValueFormat(
 }
 
 export function sanitizeViewState(value: unknown): ViewStateSnapshot | null {
-	if (!isRecord(value)) {
+	const memoryViewState = sanitizeMemoryViewState(value);
+	if (!memoryViewState || !isRecord(value)) {
 		return null;
 	}
 
 	return {
-		currentTarget: typeof value.currentTarget === 'string' ? value.currentTarget.trim() : '',
-		config: sanitizeMemoryViewConfig(value.config),
-		showSettings: typeof value.showSettings === 'boolean' ? value.showSettings : false,
+		...memoryViewState,
 		showRegisterPanel: typeof value.showRegisterPanel === 'boolean' ? value.showRegisterPanel : true,
 		registerPanelWidth: sanitizeRegisterPanelWidth(value.registerPanelWidth),
 		registerValueFormat: sanitizeRegisterValueFormat(value.registerValueFormat),
+	};
+}
+
+export function sanitizeMemoryViewState(value: unknown): MemoryViewState | null {
+	if (!isRecord(value)) {
+		return null;
+	}
+	return {
+		currentTarget: typeof value.currentTarget === 'string' ? value.currentTarget.trim() : '',
+		config: sanitizeMemoryViewConfig(value.config),
+		showSettings: typeof value.showSettings === 'boolean' ? value.showSettings : false,
+	};
+}
+
+function createDefaultViewState(): ViewStateSnapshot {
+	return {
+		currentTarget: '',
+		config: DEFAULT_CONFIG,
+		showSettings: false,
+		showRegisterPanel: true,
+		registerPanelWidth: DEFAULT_REGISTER_PANEL_WIDTH,
+		registerValueFormat: 'hex',
 	};
 }
 
@@ -135,9 +163,9 @@ function sanitizeRegisterPanelWidth(value: unknown): number {
 	return Math.min(Math.max(Math.floor(value), MIN_REGISTER_PANEL_WIDTH), MAX_REGISTER_PANEL_WIDTH);
 }
 
-function sanitizeRegisterValueFormat(value: unknown): ViewStateSnapshot['registerValueFormat'] {
-	return VALID_REGISTER_VALUE_FORMATS.includes(value as ViewStateSnapshot['registerValueFormat'])
-		? value as ViewStateSnapshot['registerValueFormat']
+function sanitizeRegisterValueFormat(value: unknown): RegisterViewState['registerValueFormat'] {
+	return VALID_REGISTER_VALUE_FORMATS.includes(value as RegisterViewState['registerValueFormat'])
+		? value as RegisterViewState['registerValueFormat']
 		: 'hex';
 }
 

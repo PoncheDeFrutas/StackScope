@@ -59,16 +59,26 @@ export interface RegisterValueSnapshot {
 	error?: string;
 }
 
-/**
- * Persisted webview UI state snapshot.
- */
-export interface ViewStateSnapshot {
+/** State owned by the memory webview. */
+export interface MemoryViewState {
 	currentTarget: string;
 	config: MemoryViewConfig;
 	showSettings: boolean;
+}
+
+export type RegisterValueFormat = 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
+
+/** State owned by the Registers webview. */
+export interface RegisterViewState {
+	registerValueFormat: RegisterValueFormat;
+}
+
+/**
+ * Persisted workspace state. Legacy panel fields remain readable for existing workspaces.
+ */
+export interface ViewStateSnapshot extends MemoryViewState, RegisterViewState {
 	showRegisterPanel: boolean;
 	registerPanelWidth: number;
-	registerValueFormat: 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
 }
 
 /**
@@ -328,7 +338,7 @@ export interface ReadRegistersResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SaveViewStateParams {
-	viewState: ViewStateSnapshot;
+	viewState: MemoryViewState;
 }
 
 export interface SaveViewStateResult {
@@ -336,7 +346,7 @@ export interface SaveViewStateResult {
 }
 
 export interface SaveRegisterViewStateParams {
-	registerValueFormat: ViewStateSnapshot['registerValueFormat'];
+	registerValueFormat: RegisterViewState['registerValueFormat'];
 }
 
 export interface SaveRegisterViewStateResult {

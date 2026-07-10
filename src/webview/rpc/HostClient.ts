@@ -17,6 +17,8 @@ import type {
 	SelectRegisterSetResult,
 	ReadRegistersResult,
 	RegisterItemSnapshot,
+	MemoryViewState,
+	RegisterViewState,
 	ViewStateSnapshot,
 	SaveViewStateResult,
 	SaveRegisterViewStateResult,
@@ -176,7 +178,7 @@ export const HostClient = {
 	/**
 	 * Persists current webview UI state.
 	 */
-	async saveViewState(viewState: ViewStateSnapshot): Promise<SaveViewStateResult> {
+	async saveViewState(viewState: MemoryViewState): Promise<SaveViewStateResult> {
 		return messageBus.request('saveViewState', { viewState });
 	},
 
@@ -184,7 +186,7 @@ export const HostClient = {
 	 * Persists register-view state without replacing memory-view state.
 	 */
 	async saveRegisterViewState(
-		registerValueFormat: ViewStateSnapshot['registerValueFormat']
+		registerValueFormat: RegisterViewState['registerValueFormat']
 	): Promise<SaveRegisterViewStateResult> {
 		return messageBus.request('saveRegisterViewState', { registerValueFormat });
 	},

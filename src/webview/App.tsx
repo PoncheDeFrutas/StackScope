@@ -6,6 +6,7 @@ import { StatusBar } from './components/StatusBar.js';
 import { Toolbar } from './components/Toolbar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { usePagedMemory } from './hooks/usePagedMemory.js';
+import { useMemoryViewStatePersistence } from './hooks/useMemoryViewStatePersistence.js';
 import {
 	captureBaselineFromPages,
 	diffPagesAgainstBaseline,
@@ -27,8 +28,6 @@ type AppState =
 	| { phase: 'opening-document'; session: SessionSnapshot }
 	| { phase: 'ready'; session: SessionSnapshot; document: DocumentSnapshot }
 	| { phase: 'error'; session: SessionSnapshot; document: DocumentSnapshot | null; error: string };
-
-const VIEW_STATE_SAVE_DEBOUNCE_MS = 200;
 
 export function App(): JSX.Element {
 	const [state, setState] = useState<AppState>({ phase: 'loading' });
@@ -160,31 +159,7 @@ export function App(): JSX.Element {
 		};
 	}, []);
 
-	useEffect(() => {
-		if (!viewStateReady) {
-			return;
-		}
-
-		const timeoutId = window.setTimeout(() => {
-			void HostClient.saveViewState({
-				currentTarget,
-				config,
-				showSettings,
-				showRegisterPanel: true,
-				registerPanelWidth: 320,
-				registerValueFormat: 'hex',
-			}).catch((err) => {
-				console.error('Failed to save view state:', err);
-			});
-		}, VIEW_STATE_SAVE_DEBOUNCE_MS);
-
-		return () => window.clearTimeout(timeoutId);
-	}, [
-		viewStateReady,
-		currentTarget,
-		config,
-		showSettings,
-	]);
+	useMemoryViewStatePersistence(viewStateReady, currentTarget, config, showSettings);
 
 	useEffect(() => {
 		if (selectedPresetId && !presets.some((preset) => preset.id === selectedPresetId)) {
