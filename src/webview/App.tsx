@@ -9,7 +9,7 @@ import { usePagedMemory } from './hooks/usePagedMemory.js';
 import { useMemoryViewStatePersistence } from './hooks/useMemoryViewStatePersistence.js';
 import {
 	captureBaselineFromPages,
-	diffPagesAgainstBaseline,
+	refreshAndDiffPages,
 	getChangedByteCount,
 	type ByteChangeMap,
 } from './changeTracking.js';
@@ -250,11 +250,9 @@ export function App(): JSX.Element {
 	async function handleRefreshInternal(): Promise<void> {
 		if (state.phase !== 'ready') return;
 
-		await pagedMemory.refreshAll();
-
 		setChangedBytes(
-			diffPagesAgainstBaseline(
-				pagedMemory.state.pages,
+			await refreshAndDiffPages(
+				pagedMemory.refreshAll,
 				baselineRef.current,
 				Date.now()
 			)

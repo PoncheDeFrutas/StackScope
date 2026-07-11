@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
 	captureBaselineFromPages,
 	diffPagesAgainstBaseline,
+	refreshAndDiffPages,
 	getChangedByteCount,
 	getChangedCellOpacity,
 	hasAnimatingChanges,
@@ -41,6 +42,21 @@ suite('Change Tracking', () => {
 		assert.deepStrictEqual(Array.from(changed.entries()), [[1, 1234]]);
 		assert.strictEqual(getChangedByteCount(changed), 1);
 		assert.strictEqual(changed.has(3), false);
+	});
+
+	test('marks changed bytes immediately after refresh against captured baseline', async () => {
+		const baseline = captureBaselineFromPages(new Map([
+			[0, { data: [0x10, 0x20, 0x30] }],
+		]));
+		const changed = await refreshAndDiffPages(
+			async () => new Map([
+				[0, { data: [0x10, 0x7f, 0x30] }],
+			]),
+			baseline,
+			1234
+		);
+
+		assert.deepStrictEqual(Array.from(changed.entries()), [[1, 1234]]);
 	});
 
 	test('getChangedCellOpacity fades down to minimum opacity without disappearing', () => {

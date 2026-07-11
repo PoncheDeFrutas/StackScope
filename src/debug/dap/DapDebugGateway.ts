@@ -13,7 +13,7 @@ import {
 	getDapErrorMessage,
 	normalizeReadMemoryResponse,
 } from './DapResponseNormalizer.js';
-import { mapWithConcurrency } from './mapWithConcurrency.js';
+import { ConcurrencyLimiter, mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 import { reportHostError } from '../../host/services/HostErrorReporter.js';
 
 const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
@@ -21,6 +21,7 @@ const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
 export interface DapDebugGatewayOptions {
 	maxConcurrentRegisterEvaluations?: number;
 	maxConcurrentStackTraces?: number;
+	maxConcurrentMemoryReads?: number;
 	sessionResolver?: (sessionId: string) => vscode.DebugSession | undefined;
 }
 
@@ -32,6 +33,7 @@ export class DapDebugGateway implements DebugGateway {
 	private readonly resolver = new DapAddressResolver();
 	private readonly maxConcurrentRegisterEvaluations: number;
 	private readonly maxConcurrentStackTraces: number;
+	private readonly memoryReadLimiter: ConcurrencyLimiter;
 	private readonly sessionResolver: (sessionId: string) => vscode.DebugSession | undefined;
 
 	constructor(options: DapDebugGatewayOptions = {}) {
@@ -40,6 +42,9 @@ export class DapDebugGateway implements DebugGateway {
 		);
 		this.maxConcurrentStackTraces = normalizeConcurrencyLimit(
 			options.maxConcurrentStackTraces
+		);
+		this.memoryReadLimiter = new ConcurrencyLimiter(
+			normalizeConcurrencyLimit(options.maxConcurrentMemoryReads)
 		);
 		this.sessionResolver = options.sessionResolver ?? findActiveSession;
 	}
@@ -55,18 +60,20 @@ export class DapDebugGateway implements DebugGateway {
 			return null;
 		}
 
-		try {
-			const response = await session.customRequest('readMemory', {
-				memoryReference,
-				offset,
-				count,
-			});
+		return this.memoryReadLimiter.run(async () => {
+			try {
+				const response = await session.customRequest('readMemory', {
+					memoryReference,
+					offset,
+					count,
+				});
 
-			return normalizeReadMemoryResponse(memoryReference, offset, count, response);
-		} catch (err) {
-			reportHostError('DapDebugGateway.readMemory', err);
-			return normalizeReadMemoryResponse(memoryReference, offset, count, null);
-		}
+				return normalizeReadMemoryResponse(memoryReference, offset, count, response);
+			} catch (err) {
+				reportHostError('DapDebugGateway.readMemory', err);
+				return normalizeReadMemoryResponse(memoryReference, offset, count, null);
+			}
+		});
 	}
 
 	async evaluateForMemoryReference(

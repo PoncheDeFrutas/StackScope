@@ -43,6 +43,15 @@ export function diffPagesAgainstBaseline(
 	return changed;
 }
 
+/** Refreshes pages then compares exact refreshed snapshot with baseline. */
+export async function refreshAndDiffPages<T extends MemoryPageDataLike>(
+	refresh: () => Promise<Iterable<[number, T]>>,
+	baseline: ReadonlyMap<number, number | null>,
+	changedAt: number
+): Promise<ByteChangeMap> {
+	return diffPagesAgainstBaseline(await refresh(), baseline, changedAt);
+}
+
 export function getChangedByteCount(changes: ReadonlyMap<number, number>): number {
 	return changes.size;
 }

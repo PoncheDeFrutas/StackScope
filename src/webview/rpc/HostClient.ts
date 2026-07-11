@@ -28,6 +28,8 @@ import type {
 } from '../../protocol/methods.js';
 import type { MemoryViewConfig } from '../../domain/config/MemoryViewConfig.js';
 
+const MEMORY_READ_TIMEOUT_MS = 15_000;
+
 /**
  * Typed client for host RPC calls.
  * Provides a clean API for webview components.
@@ -48,7 +50,7 @@ export const HostClient = {
 		offset: number,
 		count: number
 	): Promise<ReadMemoryResult> {
-		return messageBus.request('readMemory', { documentId, offset, count });
+		return messageBus.request('readMemory', { documentId, offset, count }, MEMORY_READ_TIMEOUT_MS);
 	},
 
 	/**

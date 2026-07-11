@@ -2,12 +2,16 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { ProtocolErrorCode, ProtocolRequestError } from '../../protocol/errors.js';
 import { HostClient } from '../rpc/HostClient.js';
 import { MemoryLoadGeneration } from './MemoryLoadGeneration.js';
+import { mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 
 /** Default page size in bytes */
 export const PAGE_SIZE = 4096;
 
 /** Overscan pages to load ahead/behind visible area */
 export const OVERSCAN_PAGES = 2;
+
+/** Maximum parallel memory reads initiated by one refresh. */
+export const MAX_CONCURRENT_MEMORY_READS = 4;
 
 /** Page state */
 export interface MemoryPage {
@@ -48,7 +52,7 @@ export interface UsePagedMemoryResult {
 	/** Reset cache for new document */
 	reset: (documentId: string, baseAddress: string, totalSize: number) => void;
 	/** Refresh all loaded pages */
-	refreshAll: () => Promise<void>;
+	refreshAll: () => Promise<ReadonlyMap<number, MemoryPage>>;
 	/** Check if any page is loading */
 	isLoading: boolean;
 }
@@ -68,6 +72,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 	const documentIdRef = useRef<string | null>(null);
 	const loadGenerationRef = useRef(new MemoryLoadGeneration());
 	const inFlightRef = useRef(new Map<number, number>());
+	const refreshPromiseRef = useRef<Promise<ReadonlyMap<number, MemoryPage>> | null>(null);
 
 	// Track mounted state to avoid state updates after unmount
 	const mountedRef = useRef(true);
@@ -93,13 +98,13 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			documentId: string,
 			pageOffset: number,
 			forceReload: boolean = false
-		): Promise<void> => {
+		): Promise<MemoryPage | null> => {
 			const generation = loadGenerationRef.current.current();
 			if (
 				documentIdRef.current !== documentId ||
 				(!forceReload && inFlightRef.current.has(pageOffset))
 			) {
-				return;
+				return null;
 			}
 			inFlightRef.current.set(pageOffset, generation);
 
@@ -124,9 +129,16 @@ export function usePagedMemory(): UsePagedMemoryResult {
 					documentIdRef.current !== documentId ||
 					!loadGenerationRef.current.isCurrent(generation)
 				) {
-					return;
+					return null;
 				}
 				inFlightRef.current.delete(pageOffset);
+
+				const page: MemoryPage = {
+					offset: pageOffset,
+					data: result.data,
+					address: result.address,
+					loading: false,
+				};
 
 				setState((prev) => {
 					if (
@@ -138,12 +150,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 
 					const resolvedBaseAddress = resolveBaseAddress(result.address, pageOffset);
 					const newPages = new Map(prev.pages);
-					newPages.set(pageOffset, {
-						offset: pageOffset,
-						data: result.data,
-						address: result.address,
-						loading: false,
-					});
+					newPages.set(pageOffset, page);
 
 					const newInFlight = new Set(prev.inFlight);
 					newInFlight.delete(pageOffset);
@@ -155,13 +162,14 @@ export function usePagedMemory(): UsePagedMemoryResult {
 						inFlight: newInFlight,
 					};
 				});
+				return page;
 			} catch (err) {
 				if (
 					!mountedRef.current ||
 					documentIdRef.current !== documentId ||
 					!loadGenerationRef.current.isCurrent(generation)
 				) {
-					return;
+					return null;
 				}
 				inFlightRef.current.delete(pageOffset);
 
@@ -179,7 +187,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 						newInFlight.delete(pageOffset);
 						return { ...prev, inFlight: newInFlight };
 					});
-					return;
+					return null;
 				}
 
 				setState((prev) => {
@@ -208,6 +216,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 						inFlight: newInFlight,
 					};
 				});
+				return null;
 			}
 		},
 		[]
@@ -243,8 +252,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			}
 
 			// Load pages in parallel (limit concurrency)
-			const MAX_CONCURRENT = 4;
-			pagesToLoad.slice(0, MAX_CONCURRENT).forEach((offset) => {
+			pagesToLoad.slice(0, MAX_CONCURRENT_MEMORY_READS).forEach((offset) => {
 				loadPage(docId, offset);
 			});
 		},
@@ -299,15 +307,19 @@ export function usePagedMemory(): UsePagedMemoryResult {
 	/**
 	 * Refreshes all loaded pages (for dynamic targets on stop).
 	 */
-	const refreshAll = useCallback(async (): Promise<void> => {
+	const refreshAll = useCallback(async (): Promise<ReadonlyMap<number, MemoryPage>> => {
+		if (refreshPromiseRef.current) {
+			return refreshPromiseRef.current;
+		}
+
 		const docId = state.documentId;
 		if (!docId) {
-			return;
+			return new Map();
 		}
 
 		const pageOffsets = Array.from(state.pages.keys());
 		if (pageOffsets.length === 0) {
-			return;
+			return new Map();
 		}
 
 		loadGenerationRef.current.advance();
@@ -316,7 +328,22 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			prev.documentId === docId ? { ...prev, inFlight: new Set() } : prev
 		);
 
-		await Promise.all(pageOffsets.map((offset) => loadPage(docId, offset, true)));
+		const refreshPromise = mapWithConcurrency(
+			pageOffsets,
+			MAX_CONCURRENT_MEMORY_READS,
+			(offset) => loadPage(docId, offset, true)
+		).then((pages) => new Map(
+			pages.filter((page): page is MemoryPage => page !== null).map((page) => [page.offset, page])
+		));
+
+		refreshPromiseRef.current = refreshPromise;
+		try {
+			return await refreshPromise;
+		} finally {
+			if (refreshPromiseRef.current === refreshPromise) {
+				refreshPromiseRef.current = null;
+			}
+		}
 	}, [state.documentId, state.pages, loadPage]);
 
 	const isLoading = state.inFlight.size > 0;

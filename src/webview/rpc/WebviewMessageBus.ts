@@ -23,6 +23,7 @@ declare const acquireVsCodeApi: () => {
 type PendingRequest<R> = {
 	resolve: (result: R) => void;
 	reject: (error: Error) => void;
+	timeoutId?: number;
 };
 
 type EventListener<E extends EventName> = (payload: EventMap[E]) => void;
@@ -47,7 +48,8 @@ export class WebviewMessageBus {
 	 */
 	async request<M extends MethodName>(
 		method: M,
-		params: MethodMap[M]['params']
+		params: MethodMap[M]['params'],
+		timeoutMs?: number
 	): Promise<MethodMap[M]['result']> {
 		if (this.disposed) {
 			throw new ProtocolRequestError(
@@ -64,9 +66,25 @@ export class WebviewMessageBus {
 		};
 
 		return new Promise((resolve, reject) => {
+			const timeoutId = timeoutMs === undefined
+				? undefined
+				: window.setTimeout(() => {
+					const pending = this.pendingRequests.get(id);
+					if (!pending) {
+						return;
+					}
+					this.pendingRequests.delete(id);
+					pending.reject(new ProtocolRequestError(
+						createProtocolError(
+							ProtocolErrorCode.REQUEST_TIMEOUT,
+							`Request timed out after ${timeoutMs}ms: ${method}`
+						)
+					));
+				}, timeoutMs);
 			this.pendingRequests.set(id, {
 				resolve: resolve as (result: unknown) => void,
 				reject,
+				timeoutId,
 			});
 			this.vscode.postMessage(request);
 		});
@@ -102,6 +120,9 @@ export class WebviewMessageBus {
 			createProtocolError(ProtocolErrorCode.UNKNOWN_ERROR, 'Webview message bus is disposed')
 		);
 		for (const pending of this.pendingRequests.values()) {
+			if (pending.timeoutId !== undefined) {
+				window.clearTimeout(pending.timeoutId);
+			}
 			pending.reject(error);
 		}
 		this.pendingRequests.clear();
@@ -124,6 +145,9 @@ export class WebviewMessageBus {
 		}
 
 		this.pendingRequests.delete(response.id);
+		if (pending.timeoutId !== undefined) {
+			window.clearTimeout(pending.timeoutId);
+		}
 
 		if (response.success) {
 			pending.resolve(response.result);

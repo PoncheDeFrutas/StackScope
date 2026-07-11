@@ -70,6 +70,29 @@ suite('DapDebugGateway', () => {
 			{ expression: '$sp', value: null, error: 'No active session' },
 		]);
 	});
+
+	test('limits concurrent memory reads across calls', async () => {
+		let active = 0;
+		let peak = 0;
+		const session = createSession(async (command) => {
+			assert.strictEqual(command, 'readMemory');
+			active += 1;
+			peak = Math.max(peak, active);
+			await new Promise<void>((resolve) => setTimeout(resolve, 1));
+			active -= 1;
+			return { address: '0x0', data: '' };
+		});
+		const gateway = new DapDebugGateway({
+			maxConcurrentMemoryReads: 2,
+			sessionResolver: () => session,
+		});
+
+		await Promise.all([0, 1, 2, 3].map((offset) =>
+			gateway.readMemory('session-1', '0x0', offset, 1)
+		));
+
+		assert.strictEqual(peak, 2);
+	});
 });
 
 function createSession(
