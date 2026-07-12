@@ -63,7 +63,6 @@ export function App(): JSX.Element {
 	const memoryEditing = useMemoryEditing({
 		document: editingDocument,
 		session: editingSession,
-		endianness: config.endianness,
 		pagedMemory,
 		setChangedBytes,
 	});
@@ -547,7 +546,8 @@ export function App(): JSX.Element {
 				<MemoryEditDialog
 					address={formatDumpAddress(parseAddress(pagedMemory.state.baseAddress) + BigInt(memoryEditing.edit.offset))}
 					offset={memoryEditing.edit.offset}
-					initialValue={memoryEditing.initialEditValue}
+					initialBytes={memoryEditing.edit.oldBytes}
+					initialFormat={config.numberFormat}
 					bytes={memoryEditing.edit.oldBytes.length}
 					endianness={config.endianness}
 					error={memoryEditing.editError}

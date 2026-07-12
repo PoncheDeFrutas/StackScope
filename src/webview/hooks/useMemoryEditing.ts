@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DocumentSnapshot, SessionSnapshot } from '../../protocol/methods.js';
-import type { Endianness } from '../../domain/config/MemoryViewConfig.js';
 import type { ByteChangeMap } from '../changeTracking.js';
 import type { UsePagedMemoryResult } from './usePagedMemory.js';
 import { HostClient } from '../rpc/HostClient.js';
-import { formatEditableMemoryValue } from '../memoryEditValue.js';
 
 interface MemoryEdit {
 	offset: number;
@@ -20,12 +18,11 @@ interface UndoEntry {
 interface UseMemoryEditingOptions {
 	document: DocumentSnapshot | null;
 	session: SessionSnapshot | null;
-	endianness: Endianness;
 	pagedMemory: UsePagedMemoryResult;
 	setChangedBytes: React.Dispatch<React.SetStateAction<ByteChangeMap>>;
 }
 
-export function useMemoryEditing({ document, session, endianness, pagedMemory, setChangedBytes }: UseMemoryEditingOptions) {
+export function useMemoryEditing({ document, session, pagedMemory, setChangedBytes }: UseMemoryEditingOptions) {
 	const [edit, setEdit] = useState<MemoryEdit | null>(null);
 	const [editError, setEditError] = useState<string | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -130,6 +127,5 @@ export function useMemoryEditing({ document, session, endianness, pagedMemory, s
 		submitEdit,
 		cancelEdit: () => !isMutating && setEdit(null),
 		undo,
-		initialEditValue: edit ? formatEditableMemoryValue(edit.oldBytes, endianness) : '',
 	};
 }
