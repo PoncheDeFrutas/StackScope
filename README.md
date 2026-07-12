@@ -6,7 +6,7 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
   <img src="docs/assets/stackscope.png" width="160" alt="StackScope logo" />
 </p>
 
-![Version](https://img.shields.io/badge/version-0.2.1-blue)
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.110.0-007ACC)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
@@ -22,7 +22,7 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
 
 ## What it does
 
-StackScope reads memory through active debug adapter and presents it in virtualized hex and decoded view. Memory and registers have separate VS Code views. It also supports address expressions, register sets, memory presets, byte-change tracking, call-stack navigation, and disassembly navigation.
+StackScope reads and writes debugger-backed memory through the active debug adapter, presenting it in virtualized hex and decoded view. Memory and registers have separate VS Code views. It also supports address expressions, register sets, memory presets, byte-change tracking, call-stack navigation, and disassembly navigation.
 
 ## Requirements
 
@@ -39,6 +39,7 @@ Some workflows, including call stack and disassembly, also depend on adapter sup
 3. Enter target such as 0x20000000, $sp, or &myVar.
 4. Scroll to load memory pages. Use Settings to change columns, unit size, number format, and total size.
 5. Open **StackScope: Focus Registers View** to inspect registers in its own Activity Bar view.
+6. When adapter write support is available, select memory bytes or a register value to edit it. Memory accepts hex, decimal, octal, binary, and ASCII; registers also accept a raw debugger expression.
 
 ## Commands
 

@@ -6,6 +6,18 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-11
+
+### Added
+
+- Added decimal, octal, binary, and ASCII input formats for memory writes.
+- Added matching register input formats, selectable register widths, and Raw debugger-expression input.
+
+### Changed
+
+- Made register values easier to scan and edit with clearer rows and direct value actions.
+- Unified memory and register write dialogs, including previews and confirm/cancel controls.
+
 ## [0.3.0] - 2026-07-11
 
 ### Added

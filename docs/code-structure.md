@@ -55,8 +55,11 @@ src/
 | `src/webview/App.tsx` | UI orchestration and state transitions |
 | `src/webview/RegistersApp.tsx` | independent register inspection UI and register-set editing |
 | `src/webview/hooks/usePagedMemory.ts` | page cache and loading logic |
+| `src/webview/hooks/useMemoryEditing.ts` | bounded write, verification display, and undo state |
 | `src/webview/hooks/MemoryLoadGeneration.ts` | stale page-response protection |
 | `src/webview/components/VirtualMemoryGrid.tsx` | virtualized hex/decoded rendering |
+| `src/webview/components/WriteDialogShell.tsx` | shared memory/register write-dialog layout and controls |
+| `src/webview/memoryEditValue.ts` | memory and register input parsing, formatting, and width conversion |
 
 ## Supporting files
 

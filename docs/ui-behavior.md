@@ -78,12 +78,22 @@ Separate webviews render `RegistersApp` for register inspection and `DebugNaviga
 - Set selector chooses current register set.
 - Value format selector changes display format:
   - `hex`, `dec`, `oct`, `bin`, `raw`
-- Table columns are currently `Register` and `Value`.
+- Table columns are `Register` and `Value`; alternating row backgrounds and hover state improve scanability.
 - Register column displays `reg.expression`.
+- Value column is an edit action when register writes are supported.
 - Value column displays formatted value or placeholders (`--`, `Error`).
 - While session is not stopped, view shows pause message.
 - While stale, table opacity is reduced.
 - Refresh is manual and also triggered by `sessionChanged` stopped events and `callStackChanged` events.
+
+## Memory and register writes
+
+- Memory selection opens a write dialog only when memory writes are supported and session is stopped.
+- Memory input accepts `hex`, `dec`, `oct`, `bin`, and `ascii`. Numeric values use current memory endianness; ASCII writes only entered bytes.
+- Verified memory writes update loaded bytes and create bounded undo entries. Partial writes only undo verified bytes.
+- Register value actions open a matching dialog when register writes are supported and session is stopped.
+- Register input accepts same numeric/ASCII formats with selected 8-, 16-, 32-, 64-, or 128-bit width. `raw` sends entered debugger expression unchanged.
+- Both dialogs use `WriteDialogShell` for shared preview, error, cancel, and confirm behavior.
 
 ## Register set editor behavior (`src/webview/components/RegisterSetEditor.tsx`)
 

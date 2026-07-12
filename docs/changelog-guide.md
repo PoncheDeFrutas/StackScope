@@ -47,14 +47,14 @@ pnpm run compile
 3. Bump `package.json` version.
 4. Keep release notes aligned with real merged changes only.
 
-## Versioning approach used so far
+## Versioning approach
 
-Current version in `package.json` is `0.1.3`.
+`package.json` is source of truth for current version. Do not duplicate current version in this guide.
 
 Practical progression:
 
-- `0.1.x`: fixes and incremental improvements
-- `0.2.0`: substantial feature increment
+- `0.x.y`: fixes and incremental improvements
+- `0.x.0`: substantial feature increment before 1.0.0
 - `1.0.0`: when baseline behavior is considered stable
 
 ## Example release commit content

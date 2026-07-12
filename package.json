@@ -7,7 +7,7 @@
   },
   "description": "StackScope provides flexible memory inspection with support for multiple numeric formats (hex, decimal, octal), stack-focused views, and register tracking such as SP and PC. Designed for low-level debugging workflows, it helps developers understand how memory changes during execution.",
   "icon": "docs/assets/stackscope.png",
-  "version": "0.3.0",
+	"version": "0.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",

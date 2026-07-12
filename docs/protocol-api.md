@@ -20,6 +20,7 @@ MethodMap in src/protocol/methods.ts is source of truth.
 - init
 - openDocument
 - readMemory
+- writeMemory
 - listDocuments
 - selectDocument
 - closeDocument
@@ -36,6 +37,7 @@ MethodMap in src/protocol/methods.ts is source of truth.
 - deleteRegisterSet
 - selectRegisterSet
 - readRegisters
+- writeRegister
 
 ### View and debug navigation
 
@@ -72,6 +74,13 @@ Webview clients receive ProtocolRequestError. It preserves host error code and d
 
 - `saveViewState` persists memory-view target, configuration, and settings visibility.
 - `saveRegisterViewState` persists only register value format so memory and Registers webviews do not overwrite each other's state.
+
+## Write behavior
+
+- `init` reports `memoryWriteSupported` and `registerWriteSupported`; webviews use these flags to expose write actions.
+- `writeMemory` accepts a bounded document offset and byte array. Its result includes bytes written, partial status, read-back verification, and whether read-back matches requested bytes.
+- `writeRegister` accepts register expression and debugger value expression. Its result reports submitted value and optional read-back value.
+- Host serializes mutations per debug session, including verification reads, before calling debugger adapter capabilities or supported GDB fallback commands.
 
 ## Change rule
 

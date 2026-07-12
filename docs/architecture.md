@@ -49,6 +49,8 @@ flowchart LR
 
 - `VscodeSessionTracker`
 - `DapDebugGateway`
+- `DapCapabilitiesService`
+- `DebugMutationService`
 - `DocumentRegistry`
 - `PresetService`
 - `RegisterSetService`
@@ -116,6 +118,8 @@ The webview hook `usePagedMemory` keeps page cache state. `MemoryLoadGeneration`
 ## DAP response handling
 
 `DapDebugGateway` remains the VS Code adapter. `DapResponseNormalizer` converts DAP memory responses into the stable `ReadMemoryResult` shape, including base64 decoding, unreadable-byte padding, and numeric-address fallback.
+
+`DapCapabilitiesService` records adapter write support. `DebugMutationService` serializes writes and verification reads per session. Memory writes are re-read through `MemoryDocumentService`; register writes use adapter expression evaluation and may provide a read-back value.
 
 ## Webview/provider model
 

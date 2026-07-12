@@ -20,7 +20,8 @@ These points are direct observations from current code.
 
 ## Registers view constraints
 
-- Registers view is read-only (no write-back path in protocol or host).
+- Memory and register writes require a stopped session and adapter capability support; StackScope can use supported GDB fallbacks when native DAP write requests are absent.
+- Register width defaults are inferred from displayed hexadecimal value. When width cannot be inferred, editor defaults to 64-bit and user can change it.
 - Register table currently displays expression in first column.
 - Value formatting is client-side formatting of returned `value` strings.
 

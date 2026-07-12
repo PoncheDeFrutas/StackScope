@@ -9,7 +9,8 @@ This page describes how to use the extension based on current code.
 - Optional editor-tab webview command.
 - Memory open by target expression.
 - Virtualized hex/decoded rendering backed by paged debugger reads.
-- Register inspection with selectable register sets and value formatting.
+- Register inspection and write-back with selectable register sets and value formatting.
+- Memory editing in hex, decimal, octal, binary, or ASCII.
 
 ## Requirements
 
@@ -42,10 +43,14 @@ Registered in `package.json` and wired in `src/host/commands/openMemoryViewComma
 5. Scroll memory grid; pages load lazily.
 6. Use settings panel to change columns, unit size, formats, and total size.
 7. Open **StackScope: Focus Registers View** to inspect registers, select a register set, and choose a value format.
-8. Open `StackScope: Open Call Stack (Editor Tab)` to inspect threads/frames beside the source file.
-9. Select a frame to reveal its source, switch the same tab to disassembly, and use that frame as the context for memory/register evaluation.
-10. Use `StackScope: Open Disassembly (Editor Tab)` if you want to open the same navigation tab directly in disassembly mode.
-11. Use the local mode switch in the navigation header to move between `Call Stack` and `Disassembly`.
+8. Select loaded memory bytes to write a value. Choose hex, decimal, octal, binary, or ASCII; confirm after checking preview bytes.
+9. Select a register value to write it. Choose input format and width, or use Raw to send a debugger expression unchanged.
+10. Open `StackScope: Open Call Stack (Editor Tab)` to inspect threads/frames beside the source file.
+11. Select a frame to reveal its source, switch the same tab to disassembly, and use that frame as the context for memory/register evaluation.
+12. Use `StackScope: Open Disassembly (Editor Tab)` if you want to open the same navigation tab directly in disassembly mode.
+13. Use the local mode switch in the navigation header to move between `Call Stack` and `Disassembly`.
+
+Write controls appear only while session is stopped and active adapter reports write support. Memory writes are verified by re-reading target bytes; undo covers verified bytes only.
 
 ## Target resolution behavior
 
