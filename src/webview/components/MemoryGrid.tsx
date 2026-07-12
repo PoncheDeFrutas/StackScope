@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
+import { formatMemoryAddress, parseMemoryAddress } from '../memoryAddress.js';
 
 /** Represents a byte value or null for unreadable memory */
 export type MemoryByte = number | null;
@@ -24,7 +25,7 @@ export function MemoryGrid({
 	unitSize = 1,
 	endianness = 'little',
 }: MemoryGridProps): JSX.Element {
-	const baseAddress = parseAddress(address);
+	const baseAddress = parseMemoryAddress(address);
 	const bytesPerRow = columns * unitSize;
 	const rows: JSX.Element[] = [];
 
@@ -163,7 +164,7 @@ function MemoryRow({ address, bytes, columns, unitSize, endianness }: MemoryRowP
 
 	return (
 		<tr style={styles.dataRow}>
-			<td style={styles.addressCell}>{formatAddress(address)}</td>
+			<td style={styles.addressCell}>{formatMemoryAddress(address)}</td>
 			{hexCells}
 			<td style={styles.spacer}></td>
 			{asciiCells}
@@ -189,19 +190,6 @@ function formatAsciiByte(byte: MemoryByte): string {
 		return '~';
 	}
 	return isPrintable(byte) ? String.fromCharCode(byte) : '.';
-}
-
-function parseAddress(addr: string): bigint {
-	const cleaned = addr.trim().toLowerCase();
-	if (cleaned.startsWith('0x')) {
-		return BigInt(cleaned);
-	}
-	return BigInt('0x' + cleaned);
-}
-
-function formatAddress(addr: bigint): string {
-	// Use 16 chars for 64-bit addresses
-	return '0x' + addr.toString(16).padStart(16, '0').toUpperCase();
 }
 
 function isPrintable(byte: number): boolean {

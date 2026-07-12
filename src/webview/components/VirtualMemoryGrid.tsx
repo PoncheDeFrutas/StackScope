@@ -7,6 +7,7 @@ import {
 	hasAnimatingChanges,
 	type ByteChangeMap,
 } from '../changeTracking.js';
+import { formatMemoryAddress, parseMemoryAddress } from '../memoryAddress.js';
 
 /** Represents a byte value or null for unreadable memory */
 export type MemoryByte = number | null;
@@ -235,7 +236,7 @@ export function VirtualMemoryGrid({
 		return () => window.clearInterval(intervalId);
 	}, [changedBytes]);
 
-	const baseAddr = parseAddress(baseAddress);
+	const baseAddr = parseMemoryAddress(baseAddress);
 	const showDecoded = unitSize === 1 && decodedMode !== 'hidden';
 	const midPoint = Math.floor(columns / 2);
 
@@ -529,7 +530,7 @@ function MemoryRow({
 
 	return (
 		<div style={styles.row}>
-			<div style={styles.addressCell}>{formatAddress(address)}</div>
+			<div style={styles.addressCell}>{formatMemoryAddress(address)}</div>
 			<AddressGap />
 			<div style={styles.cellGroup}>{hexCells}</div>
 			{showDecoded && (
@@ -692,25 +693,6 @@ function formatDecodedByte(byte: number, mode: DecodedMode, width: number): stri
 		default:
 			return ' '.repeat(width);
 	}
-}
-
-function parseAddress(addr: string): bigint {
-	try {
-		const cleaned = addr.trim().toLowerCase();
-		if (cleaned.startsWith('0x')) {
-			return BigInt(cleaned);
-		}
-		if (/^\d+$/.test(cleaned)) {
-			return BigInt(cleaned);
-		}
-		return BigInt(`0x${cleaned}`);
-	} catch {
-		return 0n;
-	}
-}
-
-function formatAddress(addr: bigint): string {
-	return '0x' + addr.toString(16).padStart(16, '0').toUpperCase();
 }
 
 function createSelection(anchorOffset: number, activeOffset: number): MemorySelection {

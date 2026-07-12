@@ -9,6 +9,7 @@ import { usePagedMemory } from './hooks/usePagedMemory.js';
 import { useMemoryViewStatePersistence } from './hooks/useMemoryViewStatePersistence.js';
 import { useMemoryEditing } from './hooks/useMemoryEditing.js';
 import { MemoryEditDialog } from './components/MemoryEditDialog.js';
+import { formatMemoryAddress, parseMemoryAddress } from './memoryAddress.js';
 import {
 	captureBaselineFromPages,
 	refreshAndDiffPages,
@@ -544,7 +545,7 @@ export function App(): JSX.Element {
 			</div>
 			{memoryEditing.edit && (
 				<MemoryEditDialog
-					address={formatDumpAddress(parseAddress(pagedMemory.state.baseAddress) + BigInt(memoryEditing.edit.offset))}
+					address={formatMemoryAddress(parseMemoryAddress(pagedMemory.state.baseAddress) + BigInt(memoryEditing.edit.offset))}
 					offset={memoryEditing.edit.offset}
 					initialBytes={memoryEditing.edit.oldBytes}
 					initialFormat={config.numberFormat}
@@ -670,7 +671,7 @@ function formatByteDump(
 	startOffset: number,
 	bytes: (number | null)[]
 ): string {
-	const base = parseAddress(baseAddress);
+	const base = parseMemoryAddress(baseAddress);
 	const lines: string[] = [];
 	const bytesPerLine = 16;
 
@@ -681,22 +682,10 @@ function formatByteDump(
 		const values = chunk.map((byte) => byte === null
 			? '~~'
 			: byte.toString(16).toUpperCase().padStart(2, '0'));
-		lines.push(`${formatDumpAddress(address)}  ${values.join(' ')}`);
+		lines.push(`${formatMemoryAddress(address)}  ${values.join(' ')}`);
 	}
 
 	return lines.join('\n');
-}
-
-function parseAddress(address: string): bigint {
-	try {
-		return BigInt(address);
-	} catch {
-		return 0n;
-	}
-}
-
-function formatDumpAddress(address: bigint): string {
-	return '0x' + address.toString(16).padStart(16, '0').toUpperCase();
 }
 
 const styles: Record<string, React.CSSProperties> = {
