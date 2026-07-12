@@ -7,6 +7,8 @@ import { Toolbar } from './components/Toolbar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { usePagedMemory } from './hooks/usePagedMemory.js';
 import { useMemoryViewStatePersistence } from './hooks/useMemoryViewStatePersistence.js';
+import { useMemoryEditing } from './hooks/useMemoryEditing.js';
+import { MemoryEditDialog } from './components/MemoryEditDialog.js';
 import {
 	captureBaselineFromPages,
 	refreshAndDiffPages,
@@ -36,6 +38,7 @@ export function App(): JSX.Element {
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 	const [showSettings, setShowSettings] = useState(false);
 	const [currentTarget, setCurrentTarget] = useState('');
+	const [memoryWriteSupported, setMemoryWriteSupported] = useState(false);
 
 	const [viewStateReady, setViewStateReady] = useState(false);
 	const configRef = useRef(config);
@@ -55,6 +58,15 @@ export function App(): JSX.Element {
 	// Track if we need to refresh on next stopped event
 	const pendingRefreshRef = useRef(false);
 	const [stackSelectionVersion, setStackSelectionVersion] = useState(0);
+	const editingDocument = state.phase === 'ready' ? state.document : null;
+	const editingSession = 'session' in state ? state.session : null;
+	const memoryEditing = useMemoryEditing({
+		document: editingDocument,
+		session: editingSession,
+		endianness: config.endianness,
+		pagedMemory,
+		setChangedBytes,
+	});
 
 	useEffect(() => {
 		configRef.current = config;
@@ -63,6 +75,7 @@ export function App(): JSX.Element {
 	useEffect(() => {
 		// Subscribe to session changes
 		const unsubSession = messageBus.on('sessionChanged', (payload) => {
+			setMemoryWriteSupported(payload.memoryWriteSupported);
 			setState((prev) => {
 				if (payload.session.status === 'none' || !payload.session.sessionId) {
 					restoreAttemptSessionIdRef.current = null;
@@ -201,6 +214,7 @@ export function App(): JSX.Element {
 
 			// Store presets from init
 			setPresets(result.presets);
+			setMemoryWriteSupported(result.memoryWriteSupported);
 
 			setConfig(restoredConfig);
 			setShowSettings(restoredViewState?.showSettings ?? false);
@@ -477,6 +491,7 @@ export function App(): JSX.Element {
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 	const changedByteCount = getChangedByteCount(changedBytes);
 	const activeDocument = state.phase === 'ready' ? state.document : null;
+	const canUndoMemoryWrite = memoryEditing.canUndo;
 	const selectedByteCount = memorySelection
 		? memorySelection.endOffset - memorySelection.startOffset + 1
 		: 0;
@@ -494,6 +509,8 @@ export function App(): JSX.Element {
 				onRefresh={handleRefresh}
 				onCopySelection={handleCopySelection}
 				onCopyLoaded={handleCopyLoaded}
+				onUndoMemoryWrite={() => void memoryEditing.undo()}
+				canUndoMemoryWrite={canUndoMemoryWrite}
 				onToggleSettings={handleToggleSettings}
 				isLoading={isLoading}
 				showSettings={showSettings}
@@ -520,15 +537,30 @@ export function App(): JSX.Element {
 						handleVisibleRangeChange,
 						changedBytes,
 						memorySelection,
-						setMemorySelection
+						setMemorySelection,
+						memoryWriteSupported && sessionStatus === 'stopped' && !memoryEditing.isMutating,
+						memoryEditing.beginEdit
 					)}
 				</div>
 			</div>
+			{memoryEditing.edit && (
+				<MemoryEditDialog
+					address={formatDumpAddress(parseAddress(pagedMemory.state.baseAddress) + BigInt(memoryEditing.edit.offset))}
+					offset={memoryEditing.edit.offset}
+					initialValue={memoryEditing.initialEditValue}
+					bytes={memoryEditing.edit.oldBytes.length}
+					endianness={config.endianness}
+					error={memoryEditing.editError}
+					isSubmitting={memoryEditing.isMutating}
+					onCancel={memoryEditing.cancelEdit}
+					onConfirm={(data) => void memoryEditing.submitEdit(data)}
+				/>
+			)}
 			<StatusBar
 				status={sessionStatus}
 				sessionId={'session' in state ? state.session.sessionId : null}
 				documentAddress={'document' in state && state.document ? state.document.address : null}
-				error={state.phase === 'error' ? state.error : null}
+				error={state.phase === 'error' ? state.error : memoryEditing.actionError}
 				changedByteCount={changedByteCount}
 			/>
 		</div>
@@ -542,7 +574,9 @@ function renderContent(
 	onVisibleRangeChange: (start: number, end: number) => void,
 	changedBytes: ByteChangeMap,
 	memorySelection: MemorySelection | null,
-	onSelectionChange: (selection: MemorySelection | null) => void
+	onSelectionChange: (selection: MemorySelection | null) => void,
+	canEditMemory: boolean,
+	onEditCell: (offset: number, bytes: number[]) => void
 ): JSX.Element {
 	switch (state.phase) {
 		case 'loading':
@@ -593,6 +627,8 @@ function renderContent(
 					changedBytes={changedBytes}
 					selection={memorySelection}
 					onSelectionChange={onSelectionChange}
+					canEditMemory={canEditMemory}
+					onEditCell={onEditCell}
 				/>
 			);
 
@@ -690,5 +726,74 @@ const styles: Record<string, React.CSSProperties> = {
 		textAlign: 'center',
 		padding: '20px',
 		lineHeight: 1.6,
+	},
+	dialogBackdrop: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+	dialog: {
+		background: 'var(--vscode-editor-background)',
+		border: '1px solid var(--vscode-widget-border)',
+		borderRadius: '8px',
+		padding: '16px',
+		display: 'grid',
+		gap: '12px',
+		minWidth: '320px',
+		maxWidth: '420px',
+		boxShadow: '0 12px 36px rgba(0, 0, 0, 0.35)',
+	},
+	dialogTitle: {
+		fontSize: '14px',
+		fontWeight: 600,
+		color: 'var(--vscode-foreground)',
+	},
+	dialogMeta: {
+		display: 'flex',
+		flexWrap: 'wrap',
+		gap: '8px',
+		fontSize: '12px',
+		color: 'var(--vscode-descriptionForeground)',
+	},
+	dialogInput: {
+		background: 'var(--vscode-input-background)',
+		color: 'var(--vscode-input-foreground)',
+		border: '1px solid var(--vscode-input-border)',
+		borderRadius: '4px',
+		padding: '8px 10px',
+		fontFamily: 'var(--vscode-editor-font-family)',
+		fontSize: '13px',
+	},
+	preview: {
+		display: 'grid',
+		gap: '4px',
+		padding: '10px',
+		borderRadius: '6px',
+		background: 'var(--vscode-sideBar-background)',
+		color: 'var(--vscode-descriptionForeground)',
+		fontSize: '12px',
+	},
+	dialogError: {
+		color: 'var(--vscode-errorForeground)',
+		fontSize: '12px',
+	},
+	dialogActions: {
+		display: 'flex',
+		justifyContent: 'flex-end',
+		gap: '8px',
+	},
+	secondaryButton: {
+		padding: '6px 12px',
+		border: '1px solid var(--vscode-button-secondaryBorder, var(--vscode-widget-border))',
+		backgroundColor: 'var(--vscode-button-secondaryBackground)',
+		color: 'var(--vscode-button-secondaryForeground)',
+		cursor: 'pointer',
+		borderRadius: '4px',
+		fontSize: '13px',
+	},
+	primaryButton: {
+		padding: '6px 12px',
+		border: '1px solid var(--vscode-button-border, transparent)',
+		backgroundColor: 'var(--vscode-button-background)',
+		color: 'var(--vscode-button-foreground)',
+		cursor: 'pointer',
+		borderRadius: '4px',
+		fontSize: '13px',
 	},
 };

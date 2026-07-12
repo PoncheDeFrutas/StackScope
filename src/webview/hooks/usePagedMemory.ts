@@ -53,6 +53,7 @@ export interface UsePagedMemoryResult {
 	reset: (documentId: string, baseAddress: string, totalSize: number) => void;
 	/** Refresh all loaded pages */
 	refreshAll: () => Promise<ReadonlyMap<number, MemoryPage>>;
+	applyVerifiedBytes: (offset: number, data: (number | null)[]) => void;
 	/** Check if any page is loading */
 	isLoading: boolean;
 }
@@ -346,6 +347,24 @@ export function usePagedMemory(): UsePagedMemoryResult {
 		}
 	}, [state.documentId, state.pages, loadPage]);
 
+	const applyVerifiedBytes = useCallback((offset: number, data: (number | null)[]): void => {
+		setState((prev) => {
+			const pages = new Map(prev.pages);
+			for (let index = 0; index < data.length; index++) {
+				const absolute = offset + index;
+				const pageOffset = alignToPage(absolute);
+				const page = pages.get(pageOffset);
+				if (!page) {
+					continue;
+				}
+				const pageData = [...page.data];
+				pageData[absolute - pageOffset] = data[index];
+				pages.set(pageOffset, { ...page, data: pageData, error: undefined });
+			}
+			return { ...prev, pages };
+		});
+	}, [alignToPage]);
+
 	const isLoading = state.inFlight.size > 0;
 
 	return {
@@ -354,6 +373,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 		getBytes,
 		reset,
 		refreshAll,
+		applyVerifiedBytes,
 		isLoading,
 	};
 }

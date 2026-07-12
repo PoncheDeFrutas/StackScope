@@ -53,6 +53,14 @@ export const HostClient = {
 		return messageBus.request('readMemory', { documentId, offset, count }, MEMORY_READ_TIMEOUT_MS);
 	},
 
+	async writeMemory(documentId: string, offset: number, data: number[]) {
+		return messageBus.request('writeMemory', { documentId, offset, data }, MEMORY_READ_TIMEOUT_MS);
+	},
+
+	async writeRegister(expression: string, value: string) {
+		return messageBus.request('writeRegister', { expression, value }, MEMORY_READ_TIMEOUT_MS);
+	},
+
 	/**
 	 * Opens a memory document for the given target.
 	 * Target can be: hex address, register ($pc, $sp), or expression.

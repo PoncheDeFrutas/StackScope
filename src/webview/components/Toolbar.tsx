@@ -13,6 +13,8 @@ interface ToolbarProps {
 	onRefresh: () => void;
 	onCopySelection: () => void;
 	onCopyLoaded: () => void;
+	onUndoMemoryWrite: () => void;
+	canUndoMemoryWrite: boolean;
 	onToggleSettings: () => void;
 	isLoading: boolean;
 	showSettings: boolean;
@@ -35,6 +37,8 @@ export function Toolbar({
 	onRefresh,
 	onCopySelection,
 	onCopyLoaded,
+	onUndoMemoryWrite,
+	canUndoMemoryWrite,
 	onToggleSettings,
 	isLoading,
 	showSettings,
@@ -247,6 +251,15 @@ export function Toolbar({
 				>
 					<RefreshIcon />
 				</button>
+				<button
+					onClick={onUndoMemoryWrite}
+					disabled={!canUndoMemoryWrite}
+					style={styles.smallIconButton}
+					title={canUndoMemoryWrite ? 'Undo last memory write' : 'No memory write to undo'}
+					aria-label="Undo last memory write"
+				>
+					<UndoIcon />
+				</button>
 			</div>
 
 			{/* Save preset dialog */}
@@ -346,6 +359,14 @@ function CopyAllIcon(): JSX.Element {
 	return (
 		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
 			<path d="M2 2h9v2h2v10H4v-2H2V2zm3 3v8h7V5H5zm5-1V3H3v8h1V4h6z" />
+		</svg>
+	);
+}
+
+function UndoIcon(): JSX.Element {
+	return (
+		<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+			<path d="M5.5 3.5 2 7l3.5 3.5.7-.7-2.3-2.3H9a3 3 0 1 1 0 6H8v1h1a4 4 0 0 0 0-8H3.9L6.2 4.2l-.7-.7z" />
 		</svg>
 	);
 }

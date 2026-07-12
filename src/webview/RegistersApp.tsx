@@ -7,6 +7,7 @@ import type {
 } from '../protocol/methods.js';
 import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
+import { RegisterEditDialog } from './components/RegisterEditDialog.js';
 import { RegisterLoadGeneration } from './hooks/RegisterLoadGeneration.js';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
@@ -22,6 +23,10 @@ export function RegistersApp(): JSX.Element {
 	const [isLoading, setIsLoading] = useState(false);
 	const [valueFormat, setValueFormat] = useState<RegisterValueFormat>('hex');
 	const [editingSet, setEditingSet] = useState<RegisterSetSnapshot | null | 'new'>(null);
+	const [registerWriteSupported, setRegisterWriteSupported] = useState(false);
+	const [editingRegister, setEditingRegister] = useState<RegisterValueSnapshot | null>(null);
+	const [registerEditError, setRegisterEditError] = useState<string | null>(null);
+	const [isWritingRegister, setIsWritingRegister] = useState(false);
 	const selectedSetIdRef = useRef(selectedSetId);
 	const sessionRef = useRef(session);
 	const mountedRef = useRef(false);
@@ -81,6 +86,7 @@ export function RegistersApp(): JSX.Element {
 			setRegisterSets(result.registerSets);
 			setSelectedSetId(result.selectedRegisterSetId);
 			setValueFormat(result.viewState?.registerValueFormat ?? 'hex');
+			setRegisterWriteSupported(result.registerWriteSupported);
 			if (result.session.status === 'stopped') {
 				await loadRegisters(result.selectedRegisterSetId);
 			}
@@ -99,6 +105,7 @@ export function RegistersApp(): JSX.Element {
 			initializeGenerationRef.current.invalidate();
 			sessionRef.current = payload.session;
 			setSession(payload.session);
+			setRegisterWriteSupported(payload.registerWriteSupported);
 			if (payload.session.status === 'stopped') {
 				void loadRegisters(selectedSetIdRef.current);
 			} else {
@@ -153,6 +160,32 @@ export function RegistersApp(): JSX.Element {
 			console.error('Failed to save register view state:', error);
 		});
 	}, []);
+
+	const handleEditRegister = useCallback((register: RegisterValueSnapshot) => {
+		if (sessionRef.current.status !== 'stopped' || register.value === null || isWritingRegister) return;
+		setEditingRegister(register);
+		setRegisterEditError(null);
+	}, [isWritingRegister]);
+
+	const handleConfirmRegisterEdit = useCallback(async (value: string) => {
+		if (!editingRegister || isWritingRegister) return;
+		setIsWritingRegister(true);
+		setRegisterEditError(null);
+		try {
+			const result = await HostClient.writeRegister(editingRegister.expression, value);
+			if (!result.readBackAvailable) {
+				setRegisterEditError('The debugger accepted the write but could not read the register back.');
+				return;
+			}
+			await loadRegisters(selectedSetIdRef.current);
+			setEditingRegister(null);
+		} catch (error) {
+			console.error('Failed to write register:', error);
+			setRegisterEditError(error instanceof Error ? error.message : 'Failed to write register');
+		} finally {
+			setIsWritingRegister(false);
+		}
+	}, [editingRegister, isWritingRegister, loadRegisters]);
 
 	const handleDeleteSet = useCallback(
 		async (setId: string) => {
@@ -218,12 +251,24 @@ export function RegistersApp(): JSX.Element {
 				onEditSet={setEditingSet}
 				onCreateSet={() => setEditingSet('new')}
 				onDeleteSet={handleDeleteSet}
+				canEditRegisters={registerWriteSupported && session.status === 'stopped' && !isWritingRegister}
+				onEditRegister={handleEditRegister}
 			/>
 			{editingSet !== null && (
 				<RegisterSetEditor
 					editingSet={editingSet === 'new' ? null : editingSet}
 					onSave={handleSaveSet}
 					onCancel={() => setEditingSet(null)}
+				/>
+			)}
+			{editingRegister && editingRegister.value !== null && (
+				<RegisterEditDialog
+					expression={editingRegister.expression}
+					initialValue={editingRegister.value}
+					error={registerEditError}
+					isSubmitting={isWritingRegister}
+					onCancel={() => !isWritingRegister && setEditingRegister(null)}
+					onConfirm={(value) => void handleConfirmRegisterEdit(value)}
 				/>
 			)}
 		</div>

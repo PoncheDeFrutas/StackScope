@@ -50,6 +50,8 @@ interface VirtualMemoryGridProps {
 	onSelectionChange?: (selection: MemorySelection | null) => void;
 	/** Previous data for comparison (baseline) */
 	previousData?: Map<number, number | null>;
+	canEditMemory?: boolean;
+	onEditCell?: (offset: number, bytes: number[]) => void;
 }
 
 const ROW_HEIGHT = 22;
@@ -122,6 +124,8 @@ export function VirtualMemoryGrid({
 	selection,
 	onSelectionChange,
 	previousData,
+	canEditMemory = false,
+	onEditCell,
 }: VirtualMemoryGridProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [scrollTop, setScrollTop] = useState(0);
@@ -261,6 +265,8 @@ export function VirtualMemoryGrid({
 				onCellPointerDown={handleCellPointerDown}
 				onCellPointerEnter={handleCellPointerEnter}
 				fadeNow={fadeNow}
+				canEditMemory={canEditMemory}
+				onEditCell={onEditCell}
 			/>
 		);
 	}
@@ -383,6 +389,8 @@ interface MemoryRowProps {
 	onCellPointerDown: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
 	onCellPointerEnter: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
 	fadeNow: number;
+	canEditMemory: boolean;
+	onEditCell?: (offset: number, bytes: number[]) => void;
 }
 
 function MemoryRow({
@@ -403,6 +411,8 @@ function MemoryRow({
 	onCellPointerDown,
 	onCellPointerEnter,
 	fadeNow,
+	canEditMemory,
+	onEditCell,
 }: MemoryRowProps): JSX.Element {
 	const hexCells: JSX.Element[] = [];
 	const decodedCells: JSX.Element[] = [];
@@ -421,6 +431,7 @@ function MemoryRow({
 		const unitBytes = bytes ? bytes.slice(startIdx, startIdx + unitSize) : null;
 		const isLoading = bytes === null;
 		const isUnreadable = unitBytes?.some((b) => b === null) ?? false;
+		const editableBytes = unitBytes?.every((byte): byte is number => byte !== null) ? unitBytes : null;
 		let unitChangedAt: number | null = null;
 		if (changedBytes && unitBytes) {
 			for (let i = 0; i < unitBytes.length; i++) {
@@ -467,6 +478,7 @@ function MemoryRow({
 				offset={rowOffset + startIdx}
 				onPointerDown={onCellPointerDown}
 				onPointerEnter={onCellPointerEnter}
+				onDoubleClick={editableBytes && canEditMemory ? () => onEditCell?.(rowOffset + startIdx, editableBytes) : undefined}
 			>
 				{hexContent}
 			</ByteCell>
@@ -507,6 +519,7 @@ function MemoryRow({
 					offset={rowOffset + startIdx}
 					onPointerDown={onCellPointerDown}
 					onPointerEnter={onCellPointerEnter}
+					onDoubleClick={editableBytes && canEditMemory ? () => onEditCell?.(rowOffset + startIdx, editableBytes) : undefined}
 				>
 					{decodedContent}
 				</ByteCell>
@@ -543,6 +556,7 @@ interface ByteCellProps {
 	offset?: number;
 	onPointerDown?: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
 	onPointerEnter?: (offset: number, event: ReactPointerEvent<HTMLElement>) => void;
+	onDoubleClick?: () => void;
 }
 
 /**
@@ -557,6 +571,7 @@ function ByteCell({
 	offset,
 	onPointerDown,
 	onPointerEnter,
+	onDoubleClick,
 }: ByteCellProps): JSX.Element {
 	const variantStyle = variantStyles[variant] || {};
 	const changedStyle = variant === 'changed' && changedOpacity !== undefined
@@ -572,6 +587,7 @@ function ByteCell({
 			}}
 			onPointerDown={offset === undefined ? undefined : (event) => onPointerDown?.(offset, event)}
 			onPointerEnter={offset === undefined ? undefined : (event) => onPointerEnter?.(offset, event)}
+			onDoubleClick={onDoubleClick}
 		>
 			{children}
 		</span>

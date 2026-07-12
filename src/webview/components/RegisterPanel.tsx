@@ -17,6 +17,8 @@ interface RegisterPanelProps {
 	onEditSet: (set: RegisterSetSnapshot) => void;
 	onCreateSet: () => void;
 	onDeleteSet: (setId: string) => void;
+	canEditRegisters: boolean;
+	onEditRegister: (register: RegisterValueSnapshot) => void;
 }
 
 export function RegisterPanel({
@@ -33,6 +35,8 @@ export function RegisterPanel({
 	onEditSet,
 	onCreateSet,
 	onDeleteSet,
+	canEditRegisters,
+	onEditRegister,
 }: RegisterPanelProps): JSX.Element {
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -154,7 +158,11 @@ export function RegisterPanel({
 										) : reg.value === null ? (
 											<span style={styles.unavailable}>--</span>
 										) : (
-											<span style={styles.value}>{formatRegisterValue(reg.value, valueFormat)}</span>
+											<span
+												style={{ ...styles.value, cursor: canEditRegisters ? 'pointer' : 'default' }}
+												onDoubleClick={() => canEditRegisters && onEditRegister(reg)}
+												title={canEditRegisters ? 'Double-click to edit register' : 'Debugger does not support writable register expressions'}
+											>{formatRegisterValue(reg.value, valueFormat)}</span>
 										)}
 									</td>
 								</tr>
