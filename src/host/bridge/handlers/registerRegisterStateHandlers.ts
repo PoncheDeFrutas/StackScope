@@ -3,6 +3,7 @@ import type { SessionTracker } from '../../../debug/contracts/SessionTracker.js'
 import { ProtocolErrorCode, createProtocolError } from '../../../protocol/errors.js';
 import type { RegisterSetService } from '../../services/RegisterSetService.js';
 import type { ViewStateService } from '../../services/ViewStateService.js';
+import type { DebugMutationService } from '../../services/DebugMutationService.js';
 import { setHandler, type HandlerRegistry } from './types.js';
 
 export interface RegisterStateHandlerDependencies {
@@ -10,6 +11,7 @@ export interface RegisterStateHandlerDependencies {
 	debugGateway: DebugGateway;
 	registerSetService: RegisterSetService;
 	viewStateService: ViewStateService;
+	debugMutations: DebugMutationService;
 	getSelectedFrameId: (sessionId: string) => number | undefined;
 }
 
@@ -22,6 +24,7 @@ export function registerRegisterStateHandlers(
 		debugGateway,
 		registerSetService,
 		viewStateService,
+		debugMutations,
 		getSelectedFrameId,
 	} = dependencies;
 
@@ -61,6 +64,35 @@ export function registerRegisterStateHandlers(
 				};
 			}),
 		};
+	});
+
+	setHandler(handlers, 'writeRegister', async ({ expression, value }) => {
+		if (!expression.trim() || !value.trim()) {
+			throw createProtocolError(ProtocolErrorCode.WRITE_REGISTER_FAILED, 'Register expression and value are required');
+		}
+		const state = await sessionTracker.refresh();
+		if (!state.sessionId) {
+			throw createProtocolError(ProtocolErrorCode.NO_ACTIVE_SESSION, 'No active debug session');
+		}
+		if (state.status !== 'stopped') {
+			throw createProtocolError(ProtocolErrorCode.SESSION_NOT_STOPPED, 'Pause execution before writing registers.');
+		}
+		return debugMutations.run(state.sessionId, async () => {
+			const current = await sessionTracker.refresh();
+			if (!current.sessionId || current.sessionId !== state.sessionId) {
+				throw createProtocolError(ProtocolErrorCode.NO_ACTIVE_SESSION, 'Debug session changed before register write');
+			}
+			if (current.status !== 'stopped') {
+				throw createProtocolError(ProtocolErrorCode.SESSION_NOT_STOPPED, 'Pause execution before writing registers.');
+			}
+			const written = await debugGateway.setExpression(current.sessionId, expression.trim(), value.trim(), getSelectedFrameId(current.sessionId));
+			if (!written) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_REGISTER_UNSUPPORTED, 'Debugger does not support writable register expressions');
+			}
+			const verification = await debugGateway.readRegisters(current.sessionId, [expression.trim()], getSelectedFrameId(current.sessionId));
+			const actual = verification[0]?.value ?? null;
+			return { value: written.value, readBackValue: actual, readBackAvailable: actual !== null };
+		});
 	});
 
 	setHandler(handlers, 'saveViewState', async ({ viewState }) => {

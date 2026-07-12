@@ -6,6 +6,7 @@ export function registerDocumentHandlers(
 	documentService: MemoryDocumentService
 ): void {
 	setHandler(handlers, 'readMemory', (params) => documentService.readMemory(params));
+	setHandler(handlers, 'writeMemory', (params) => documentService.writeMemory(params));
 	setHandler(handlers, 'openDocument', (params) => documentService.openDocument(params));
 	setHandler(handlers, 'listDocuments', async () => documentService.listDocuments());
 	setHandler(handlers, 'selectDocument', async (params) => documentService.selectDocument(params));

@@ -3,6 +3,7 @@ import type { PresetService } from '../../services/PresetService.js';
 import type { RegisterSetService } from '../../services/RegisterSetService.js';
 import type { ViewStateService } from '../../services/ViewStateService.js';
 import type { MemoryDocumentService } from '../../services/MemoryDocumentService.js';
+import type { DapCapabilitiesService } from '../../../debug/dap/DapCapabilitiesService.js';
 import { toPresetSnapshot, toRegisterSetSnapshot } from './snapshots.js';
 import { setHandler, type HandlerRegistry } from './types.js';
 
@@ -12,6 +13,7 @@ export interface WorkspaceHandlerDependencies {
 	presetService: PresetService;
 	registerSetService: RegisterSetService;
 	viewStateService: ViewStateService;
+	capabilities: DapCapabilitiesService;
 }
 
 export function registerWorkspaceHandlers(
@@ -24,6 +26,7 @@ export function registerWorkspaceHandlers(
 		presetService,
 		registerSetService,
 		viewStateService,
+		capabilities,
 	} = dependencies;
 
 	setHandler(handlers, 'init', async () => {
@@ -37,6 +40,8 @@ export function registerWorkspaceHandlers(
 			registerSets: registerSetService.getAll().map(toRegisterSetSnapshot),
 			selectedRegisterSetId: registerSetService.getSelectedId(),
 			viewState: viewStateService.get(),
+			memoryWriteSupported: state.sessionId ? capabilities.getWriteSupport(state.sessionId).memory : false,
+			registerWriteSupported: state.sessionId ? capabilities.getWriteSupport(state.sessionId).register : false,
 		};
 	});
 

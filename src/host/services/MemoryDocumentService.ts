@@ -11,8 +11,10 @@ import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js
 import type { DocumentChangedPayload } from '../../protocol/events.js';
 import type { MethodMap } from '../../protocol/methods.js';
 import { generateDocumentId } from '../../shared/ids.js';
+import { DebugMutationService } from './DebugMutationService.js';
 
 type DocumentSnapshot = MethodMap['listDocuments']['result']['documents'][number];
+export const MAX_MEMORY_WRITE_BYTES = 16;
 
 /**
  * Owns document lifecycle and debugger-backed memory reads for the host.
@@ -24,7 +26,8 @@ export class MemoryDocumentService {
 		private readonly debugGateway: DebugGateway,
 		private readonly documentRegistry: DocumentRegistry,
 		private readonly getSelectedFrameId: (sessionId: string) => number | undefined,
-		private readonly onDocumentsChanged: (payload: DocumentChangedPayload) => void
+		private readonly onDocumentsChanged: (payload: DocumentChangedPayload) => void,
+		private readonly debugMutations = new DebugMutationService()
 	) {}
 
 	async readMemory(
@@ -42,29 +45,15 @@ export class MemoryDocumentService {
 		const state = await this.requireStoppedSession(
 			'Debug session is not stopped. Pause execution to read memory.'
 		);
-		let memoryReference = doc.memoryReference;
-		if (doc.isDynamic) {
-			const newReference = await this.debugGateway.evaluateForMemoryReference(
-				state.sessionId,
-				doc.address,
-				this.getSelectedFrameId(state.sessionId)
-			);
-			if (newReference) {
-				memoryReference = newReference;
-				if (newReference !== doc.memoryReference) {
-					const updated = this.documentRegistry.updateMemoryReference(documentId, newReference);
-					if (updated) {
-						doc = updated;
-					}
-				}
-			} else if (!doc.hasResolvedReference) {
-				return this.createUnreadableResult(count);
-			}
+		const resolved = await this.resolveMemoryReference(doc, state.sessionId);
+		doc = resolved.document;
+		if (!resolved.hasResolvedReference) {
+			return this.createUnreadableResult(count);
 		}
 
 		const result = await this.debugGateway.readMemory(
 			state.sessionId,
-			memoryReference,
+			resolved.reference,
 			offset,
 			count
 		);
@@ -76,6 +65,51 @@ export class MemoryDocumentService {
 		}
 
 		return result;
+	}
+
+	async writeMemory(params: MethodMap['writeMemory']['params']): Promise<MethodMap['writeMemory']['result']> {
+		if (!Number.isInteger(params.offset) || params.offset < 0) {
+			throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, 'Write offset must be a non-negative integer');
+		}
+		if (!params.data.length || params.data.length > MAX_MEMORY_WRITE_BYTES || params.data.some((byte) => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+			throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, 'Write data must contain bytes');
+		}
+		const doc = this.documentRegistry.get(params.documentId);
+		if (!doc) {
+			throw createProtocolError(ProtocolErrorCode.DOCUMENT_NOT_FOUND, `Document ${params.documentId} not found`);
+		}
+		if (params.offset + params.data.length > doc.config.totalSize) {
+			throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, 'Write range exceeds the active memory document');
+		}
+		const state = await this.requireStoppedSession('Pause execution before writing memory.');
+		return this.debugMutations.run(state.sessionId, async () => {
+			const current = await this.requireStoppedSession('Pause execution before writing memory.');
+			const currentDocument = this.documentRegistry.get(params.documentId);
+			if (!currentDocument || currentDocument.sessionId !== current.sessionId) {
+				throw createProtocolError(ProtocolErrorCode.NO_ACTIVE_SESSION, 'Document belongs to another debug session');
+			}
+			if (params.offset + params.data.length > currentDocument.config.totalSize) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, 'Write range exceeds the active memory document');
+			}
+			const resolved = await this.resolveMemoryReference(currentDocument, current.sessionId);
+			if (!resolved.hasResolvedReference) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, 'Could not resolve the memory reference for this document');
+			}
+			const write = await this.debugGateway.writeMemory(current.sessionId, resolved.reference, params.offset, params.data, true);
+			if (!write) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_UNSUPPORTED, 'Debugger does not support verified memory writes');
+			}
+			if (write.error && write.bytesWritten === 0) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_FAILED, write.error);
+			}
+			const verification = await this.debugGateway.readMemory(current.sessionId, resolved.reference, write.offset, write.bytesWritten);
+			if (!verification) {
+				throw createProtocolError(ProtocolErrorCode.WRITE_MEMORY_VERIFICATION_FAILED, 'Could not verify memory write');
+			}
+			const expected = params.data.slice(0, write.bytesWritten);
+			const verified = verification.data.length >= expected.length && expected.every((byte, index) => verification.data[index] === byte);
+			return { offset: write.offset, bytesWritten: write.bytesWritten, partial: write.bytesWritten !== params.data.length, verification, verified };
+		});
 	}
 
 	async openDocument(
@@ -210,6 +244,35 @@ export class MemoryDocumentService {
 			);
 		}
 		return { sessionId: state.sessionId };
+	}
+
+	private async resolveMemoryReference(
+		document: MemoryDocument,
+		sessionId: string
+	): Promise<{ document: MemoryDocument; reference: string; hasResolvedReference: boolean }> {
+		if (!document.isDynamic) {
+			return {
+				document,
+				reference: document.memoryReference,
+				hasResolvedReference: document.hasResolvedReference,
+			};
+		}
+		const reference = await this.debugGateway.evaluateForMemoryReference(
+			sessionId,
+			document.address,
+			this.getSelectedFrameId(sessionId)
+		);
+		if (!reference) {
+			return {
+				document,
+				reference: document.memoryReference,
+				hasResolvedReference: document.hasResolvedReference,
+			};
+		}
+		const updated = reference === document.memoryReference
+			? document
+			: this.documentRegistry.updateMemoryReference(document.id, reference) ?? document;
+		return { document: updated, reference, hasResolvedReference: true };
 	}
 
 	private notify(

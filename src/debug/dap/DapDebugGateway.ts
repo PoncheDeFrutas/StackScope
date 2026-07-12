@@ -4,6 +4,8 @@ import type {
 	DisassembledInstructionResult,
 	DebugGateway,
 	ReadMemoryResult,
+	WriteMemoryResult,
+	SetExpressionResult,
 	RegisterEvalResult,
 	StackFrameResult,
 	StackThreadResult,
@@ -15,6 +17,7 @@ import {
 } from './DapResponseNormalizer.js';
 import { ConcurrencyLimiter, mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 import { reportHostError } from '../../host/services/HostErrorReporter.js';
+import type { DapCapabilitiesService } from './DapCapabilitiesService.js';
 
 const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
 
@@ -36,7 +39,7 @@ export class DapDebugGateway implements DebugGateway {
 	private readonly memoryReadLimiter: ConcurrencyLimiter;
 	private readonly sessionResolver: (sessionId: string) => vscode.DebugSession | undefined;
 
-	constructor(options: DapDebugGatewayOptions = {}) {
+	constructor(options: DapDebugGatewayOptions = {}, private readonly capabilities?: DapCapabilitiesService) {
 		this.maxConcurrentRegisterEvaluations = normalizeConcurrencyLimit(
 			options.maxConcurrentRegisterEvaluations
 		);
@@ -47,6 +50,86 @@ export class DapDebugGateway implements DebugGateway {
 			normalizeConcurrencyLimit(options.maxConcurrentMemoryReads)
 		);
 		this.sessionResolver = options.sessionResolver ?? findActiveSession;
+	}
+
+	async writeMemory(sessionId: string, memoryReference: string, offset: number, data: number[], allowPartial: boolean): Promise<WriteMemoryResult | null> {
+		const session = this.findSession(sessionId);
+		if (!session) {
+			return null;
+		}
+		if (!this.capabilities?.supportsWriteMemory(sessionId)) {
+			return this.capabilities?.supportsGdbFallback(sessionId)
+				? this.writeMemoryWithGdbEvaluate(session, memoryReference, offset, data, allowPartial)
+				: null;
+		}
+		try {
+			const response = await session.customRequest('writeMemory', {
+				memoryReference, offset, allowPartial,
+				data: Buffer.from(data).toString('base64'),
+			}) as { offset?: unknown; bytesWritten?: unknown };
+			if (!Number.isInteger(response?.bytesWritten) || (response.bytesWritten as number) < 0 || (response.bytesWritten as number) > data.length) {
+				return null;
+			}
+			return { offset: Number.isInteger(response.offset) ? response.offset as number : offset, bytesWritten: response.bytesWritten as number };
+		} catch (err) {
+			reportHostError('DapDebugGateway.writeMemory', err);
+			return { offset, bytesWritten: 0, error: getDapErrorMessage(err) };
+		}
+	}
+
+	async setExpression(sessionId: string, expression: string, value: string, frameId?: number): Promise<SetExpressionResult | null> {
+		const session = this.findSession(sessionId);
+		if (!session) {
+			return null;
+		}
+		if (!this.capabilities?.supportsSetExpression(sessionId)) {
+			if (!this.capabilities?.supportsGdbFallback(sessionId)) {
+				return null;
+			}
+			const register = normalizeGdbRegister(expression);
+			const result = await this.evaluateAssignment(session, `${register} = ${value}`, frameId);
+			return result.value === null ? null : { value: result.value };
+		}
+		try {
+			const response = await session.customRequest('setExpression', { expression, value, frameId }) as { value?: unknown };
+			return typeof response?.value === 'string' ? { value: response.value } : null;
+		} catch (error) {
+			reportHostError('DapDebugGateway.setExpression', error);
+			return null;
+		}
+	}
+
+	private async writeMemoryWithGdbEvaluate(session: vscode.DebugSession, memoryReference: string, offset: number, data: number[], allowPartial: boolean): Promise<WriteMemoryResult | null> {
+		let address: bigint;
+		try { address = BigInt(memoryReference) + BigInt(offset); } catch { return { offset, bytesWritten: 0, error: `Invalid GDB memory reference: ${memoryReference}` }; }
+		let bytesWritten = 0;
+		for (const byte of data) {
+			const hexByte = byte.toString(16).padStart(2, '0');
+			const expression = `*(unsigned char *)0x${address.toString(16)} = 0x${hexByte}`;
+			const cAttempt = await this.evaluateAssignment(session, expression, undefined, ['repl']);
+			const commandAttempt = cAttempt.value === null
+				? await this.evaluateAssignment(session, `-exec set {unsigned char}0x${address.toString(16)} = 0x${hexByte}`, undefined, ['repl'])
+				: null;
+			if (cAttempt.value === null && commandAttempt?.value === null) {
+				const error = `GDB rejected memory write. C assignment: ${cAttempt.error ?? 'unknown error'}. -exec set: ${commandAttempt?.error ?? 'unknown error'}`;
+				return allowPartial ? { offset, bytesWritten, error } : null;
+			}
+			bytesWritten += 1;
+			address += 1n;
+		}
+		return { offset, bytesWritten };
+	}
+
+	private async evaluateAssignment(session: vscode.DebugSession, expression: string, frameId?: number, contexts: readonly ('repl' | 'watch')[] = ['repl']): Promise<{ value: string | null; error?: string }> {
+		let error: string | undefined;
+		for (const context of contexts) {
+			try {
+				const args = frameId === undefined ? { expression, context } : { expression, context, frameId };
+				const response = await session.customRequest('evaluate', args) as { result?: unknown };
+				return { value: typeof response?.result === 'string' ? response.result : '' };
+			} catch (caught) { error = getDapErrorMessage(caught); }
+		}
+		return { value: null, error };
 	}
 
 	async readMemory(
@@ -344,6 +427,11 @@ function normalizeConcurrencyLimit(value: number | undefined): number {
 		return DEFAULT_MAX_CONCURRENT_DAP_REQUESTS;
 	}
 	return Math.max(1, Math.floor(value));
+}
+
+function normalizeGdbRegister(expression: string): string {
+	const trimmed = expression.trim();
+	return trimmed.startsWith('$') ? trimmed : `$${trimmed}`;
 }
 
 function findActiveSession(sessionId: string): vscode.DebugSession | undefined {

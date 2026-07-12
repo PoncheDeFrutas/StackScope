@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { DebugGateway } from '../../debug/contracts/DebugGateway.js';
 import type { SessionState, SessionTracker } from '../../debug/contracts/SessionTracker.js';
+import type { DapCapabilitiesService } from '../../debug/dap/DapCapabilitiesService.js';
 import type { EventMap, EventName } from '../../protocol/events.js';
 import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js';
 import type {
@@ -23,16 +24,31 @@ export class DebugNavigationController {
 		private readonly sessionTracker: SessionTracker,
 		private readonly debugGateway: DebugGateway,
 		private readonly stackSelectionService: StackSelectionService,
-		private readonly sendEvent: EventEmitter
+		private readonly sendEvent: EventEmitter,
+		private readonly capabilities?: DapCapabilitiesService
 	) {}
 
 	handleSessionChanged(state: SessionState): void {
 		this.stackSelectionService.clearIfSessionChanged(state.sessionId);
-		this.sendEvent('sessionChanged', {
-			session: { sessionId: state.sessionId, status: state.status },
-		});
+		this.emitSessionChanged(state);
 		void this.emitCallStackChanged();
 		void this.emitDisassemblyChanged();
+	}
+
+	handleCapabilitiesChanged(sessionId: string): void {
+		const state = this.sessionTracker.getState();
+		if (state.sessionId === sessionId) {
+			this.emitSessionChanged(state);
+		}
+	}
+
+	private emitSessionChanged(state: SessionState): void {
+		const support = state.sessionId ? this.capabilities?.getWriteSupport(state.sessionId) : undefined;
+		this.sendEvent('sessionChanged', {
+			session: { sessionId: state.sessionId, status: state.status },
+			memoryWriteSupported: support?.memory ?? false,
+			registerWriteSupported: support?.register ?? false,
+		});
 	}
 
 	getSelectionSnapshot(): StackSelectionSnapshot {

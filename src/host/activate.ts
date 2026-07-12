@@ -74,6 +74,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		dispose: () => services?.editorTabService.dispose(),
 	});
 	context.subscriptions.push({ dispose: disposeHostErrorReporter });
+	context.subscriptions.push(services.capabilities);
 
 	console.log('StackScope: Activated');
 }

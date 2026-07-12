@@ -13,6 +13,8 @@ import type { ViewStateService } from '../services/ViewStateService.js';
 import { MemoryDocumentService } from '../services/MemoryDocumentService.js';
 import { reportHostError } from '../services/HostErrorReporter.js';
 import { DebugNavigationController } from './DebugNavigationController.js';
+import type { DapCapabilitiesService } from '../../debug/dap/DapCapabilitiesService.js';
+import type { DebugMutationService } from '../services/DebugMutationService.js';
 import { registerDocumentHandlers } from './handlers/registerDocumentHandlers.js';
 import { registerNavigationHandlers } from './handlers/registerNavigationHandlers.js';
 import { registerRegisterStateHandlers } from './handlers/registerRegisterStateHandlers.js';
@@ -36,21 +38,26 @@ export class HostMessageRouter {
 		private readonly presetService: PresetService,
 		private readonly registerSetService: RegisterSetService,
 		private readonly stackSelectionService: StackSelectionService,
-		private readonly viewStateService: ViewStateService
+		private readonly viewStateService: ViewStateService,
+		private readonly capabilities: DapCapabilitiesService,
+		private readonly debugMutations: DebugMutationService
 	) {
 		this.navigation = new DebugNavigationController(
 			this.sessionTracker,
 			this.debugGateway,
 			this.stackSelectionService,
-			(event, payload) => this.sendEvent(event, payload)
+			(event, payload) => this.sendEvent(event, payload),
+			this.capabilities
 		);
 		this.documentService = new MemoryDocumentService(
 			this.sessionTracker,
 			this.debugGateway,
 			documentRegistry,
 			(sessionId) => this.navigation.getSelectedFrameId(sessionId),
-			(payload) => this.sendEvent('documentChanged', payload)
+			(payload) => this.sendEvent('documentChanged', payload),
+			this.debugMutations
 		);
+		this.capabilities.onDidChange((sessionId) => this.navigation.handleCapabilitiesChanged(sessionId));
 		this.registerHandlers();
 	}
 
@@ -102,12 +109,14 @@ export class HostMessageRouter {
 			presetService: this.presetService,
 			registerSetService: this.registerSetService,
 			viewStateService: this.viewStateService,
+			capabilities: this.capabilities,
 		});
 		registerRegisterStateHandlers(this.handlers, {
 			sessionTracker: this.sessionTracker,
 			debugGateway: this.debugGateway,
 			registerSetService: this.registerSetService,
 			viewStateService: this.viewStateService,
+			debugMutations: this.debugMutations,
 			getSelectedFrameId: (sessionId) => this.navigation.getSelectedFrameId(sessionId),
 		});
 		registerNavigationHandlers(this.handlers, this.navigation);
