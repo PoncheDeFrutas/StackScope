@@ -93,7 +93,70 @@ suite('DapDebugGateway', () => {
 
 		assert.strictEqual(peak, 2);
 	});
+
+	test('uses GDB evaluate fallback for memory writes when DAP writeMemory is unavailable', async () => {
+		const expressions: string[] = [];
+		const session = createSession(async (command, args) => {
+			assert.strictEqual(command, 'evaluate');
+			expressions.push(String(args.expression));
+			return { result: '1' };
+		});
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+
+		const result = await gateway.writeMemory('session-1', '0x1000', 1, [0xaa, 0xbb], true);
+
+		assert.deepStrictEqual(result, { offset: 1, bytesWritten: 2 });
+		assert.deepStrictEqual(expressions, [
+			'*(unsigned char *)0x1001 = 0xaa',
+			'*(unsigned char *)0x1002 = 0xbb',
+		]);
+	});
+
+	test('uses GDB evaluate fallback for register writes', async () => {
+		const session = createSession(async (command, args) => {
+			assert.strictEqual(command, 'evaluate');
+			assert.strictEqual(args.expression, '$x0 = 0x42');
+			return { result: '0x42' };
+		});
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+
+		assert.deepStrictEqual(await gateway.setExpression('session-1', 'x0', '0x42'), { value: '0x42' });
+	});
+
+	test('falls back to GDB set command when C assignment fails', async () => {
+		const expressions: string[] = [];
+		const contexts: unknown[] = [];
+		const session = createSession(async (_command, args) => {
+			const expression = String(args.expression);
+			expressions.push(expression);
+			contexts.push(args.context);
+			assert.strictEqual('frameId' in args, false);
+			if (expression.startsWith('*(')) {
+				throw new Error('C expression rejected');
+			}
+			return { result: '' };
+		});
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+
+		assert.deepStrictEqual(await gateway.writeMemory('session-1', '0x2000', 0, [0x49], true), {
+			offset: 0,
+			bytesWritten: 1,
+		});
+		assert.deepStrictEqual(expressions, [
+			'*(unsigned char *)0x2000 = 0x49',
+			'-exec set {unsigned char}0x2000 = 0x49',
+		]);
+		assert.deepStrictEqual(contexts, ['repl', 'repl']);
+	});
 });
+
+function gdbFallbackCapabilities() {
+	return {
+		supportsWriteMemory: () => false,
+		supportsSetExpression: () => false,
+		supportsGdbFallback: () => true,
+	} as never;
+}
 
 function createSession(
 	customRequest: (command: string, args: Record<string, unknown>) => Promise<unknown>

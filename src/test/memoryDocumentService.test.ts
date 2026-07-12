@@ -6,6 +6,7 @@ import { createMemoryDocument } from '../domain/documents/MemoryDocument.js';
 import type { DocumentChangedPayload } from '../protocol/events.js';
 import { ProtocolErrorCode } from '../protocol/errors.js';
 import { MemoryDocumentService } from '../host/services/MemoryDocumentService.js';
+import { MAX_MEMORY_WRITE_BYTES } from '../host/services/MemoryDocumentService.js';
 
 function createSessionTracker(state: SessionState): SessionTracker {
 	return {
@@ -28,6 +29,8 @@ function createDebugGateway(
 
 	return {
 		readMemory: async () => emptyRead,
+		writeMemory: async () => ({ offset: 0, bytesWritten: 0 }),
+		setExpression: async () => null,
 		evaluateForMemoryReference: async () => null,
 		readRegisters: async () => [],
 		listCallStack: async () => [],
@@ -161,5 +164,68 @@ suite('MemoryDocumentService', () => {
 			}
 		);
 		assert.strictEqual(evaluations, 0);
+	});
+
+	test('writes partial memory then returns verification result', async () => {
+		const registry = new DocumentRegistry();
+		registry.add(createMemoryDocument('doc-1', '0x2000', 'session-1', '0x2000'));
+		const service = new MemoryDocumentService(
+			createSessionTracker({ sessionId: 'session-1', status: 'stopped' }),
+			createDebugGateway({
+				writeMemory: async () => ({ offset: 0, bytesWritten: 1, error: 'second byte rejected' }),
+				readMemory: async () => ({ address: '0x2000', data: [0xaa], bytesRead: 1, hasUnreadable: false }),
+			}),
+			registry,
+			() => undefined,
+			() => undefined
+		);
+
+		const result = await service.writeMemory({ documentId: 'doc-1', offset: 0, data: [0xaa, 0xbb] });
+
+		assert.strictEqual(result.bytesWritten, 1);
+		assert.strictEqual(result.partial, true);
+		assert.strictEqual(result.verified, true);
+	});
+
+	test('rejects writes outside the bounded active document before reaching the debugger', async () => {
+		const registry = new DocumentRegistry();
+		registry.add(createMemoryDocument('doc-1', '0x2000', 'session-1', '0x2000'));
+		let writes = 0;
+		const service = new MemoryDocumentService(
+			createSessionTracker({ sessionId: 'session-1', status: 'stopped' }),
+			createDebugGateway({ writeMemory: async () => { writes += 1; return { offset: 0, bytesWritten: 0 }; } }),
+			registry,
+			() => undefined,
+			() => undefined
+		);
+
+		await assert.rejects(
+			() => service.writeMemory({ documentId: 'doc-1', offset: 0, data: new Array(MAX_MEMORY_WRITE_BYTES + 1).fill(0) }),
+			(error: unknown) => (error as { code?: string }).code === ProtocolErrorCode.WRITE_MEMORY_FAILED
+		);
+		assert.strictEqual(writes, 0);
+	});
+
+	test('re-resolves a dynamic document and stores its reference before writing', async () => {
+		const registry = new DocumentRegistry();
+		registry.add(createMemoryDocument('doc-1', '$sp', 'session-1', '0x0', false));
+		let writtenReference = '';
+		const service = new MemoryDocumentService(
+			createSessionTracker({ sessionId: 'session-1', status: 'stopped' }),
+			createDebugGateway({
+				evaluateForMemoryReference: async () => '0x3000',
+				writeMemory: async (_sessionId, reference) => { writtenReference = reference; return { offset: 0, bytesWritten: 1 }; },
+				readMemory: async () => ({ address: '0x3000', data: [0xaa], bytesRead: 1, hasUnreadable: false }),
+			}),
+			registry,
+			() => undefined,
+			() => undefined
+		);
+
+		const result = await service.writeMemory({ documentId: 'doc-1', offset: 0, data: [0xaa] });
+
+		assert.strictEqual(result.verified, true);
+		assert.strictEqual(writtenReference, '0x3000');
+		assert.strictEqual(registry.get('doc-1')?.memoryReference, '0x3000');
 	});
 });

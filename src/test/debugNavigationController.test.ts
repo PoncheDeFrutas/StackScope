@@ -49,7 +49,9 @@ function createSessionTracker(state: SessionState): SessionTracker {
 
 function createDebugGateway(): DebugGateway {
 	return {
-		readMemory: async () => null,
+	readMemory: async () => null,
+	writeMemory: async () => null,
+	setExpression: async () => null,
 		evaluateForMemoryReference: async () => null,
 		readRegisters: async () => [],
 		listCallStack: async () => [{

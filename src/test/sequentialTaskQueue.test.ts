@@ -41,4 +41,9 @@ suite('SequentialTaskQueue', () => {
 
 		assert.deepStrictEqual(calls, ['recovered']);
 	});
+
+	test('preserves the queued operation result', async () => {
+		const queue = new SequentialTaskQueue();
+		assert.strictEqual(await queue.enqueue(async () => 42), 42);
+	});
 });
