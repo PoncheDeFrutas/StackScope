@@ -6,6 +6,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-11
+
+### Added
+
+- Added verified memory and register editing with bounded undo support.
+- Added DAP capability detection and GDB write fallbacks.
+
+### Changed
+
+- Serialized debugger mutations and bounded memory writes to keep edits safe across views.
+
 ## [0.2.1] - 2026-07-10
 
 ### Changed
