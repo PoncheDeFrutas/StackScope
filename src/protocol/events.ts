@@ -13,6 +13,8 @@ import type {
 
 export interface SessionChangedPayload {
 	session: SessionSnapshot;
+	memoryWriteSupported: boolean;
+	registerWriteSupported: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

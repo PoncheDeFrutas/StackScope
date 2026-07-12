@@ -155,6 +155,8 @@ export interface InitResult {
 	registerSets: RegisterSetSnapshot[];
 	selectedRegisterSetId: string;
 	viewState: ViewStateSnapshot | null;
+	memoryWriteSupported: boolean;
+	registerWriteSupported: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +183,11 @@ export interface ReadMemoryResult {
 	/** True if some bytes could not be read. */
 	hasUnreadable: boolean;
 }
+
+export interface WriteMemoryParams { documentId: string; offset: number; data: number[]; }
+export interface WriteMemoryResult { offset: number; bytesWritten: number; partial: boolean; verification: ReadMemoryResult; verified: boolean; }
+export interface WriteRegisterParams { expression: string; value: string; }
+export interface WriteRegisterResult { value: string; readBackValue: string | null; readBackAvailable: boolean; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OpenDocument method
@@ -396,6 +403,8 @@ export interface GetDisassemblyResult extends DisassemblySnapshot {
 export type MethodName = 
 	| 'init' 
 	| 'readMemory' 
+	| 'writeMemory'
+	| 'writeRegister'
 	| 'openDocument'
 	| 'listDocuments'
 	| 'selectDocument'
@@ -422,6 +431,8 @@ export type MethodName =
 export interface MethodMap {
 	init: { params: InitParams; result: InitResult };
 	readMemory: { params: ReadMemoryParams; result: ReadMemoryResult };
+	writeMemory: { params: WriteMemoryParams; result: WriteMemoryResult };
+	writeRegister: { params: WriteRegisterParams; result: WriteRegisterResult };
 	openDocument: { params: OpenDocumentParams; result: OpenDocumentResult };
 	listDocuments: { params: ListDocumentsParams; result: ListDocumentsResult };
 	selectDocument: { params: SelectDocumentParams; result: SelectDocumentResult };

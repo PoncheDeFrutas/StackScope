@@ -4,9 +4,9 @@
 export class SequentialTaskQueue {
 	private pending: Promise<void> = Promise.resolve();
 
-	enqueue(task: () => PromiseLike<void>): Promise<void> {
+	enqueue<T>(task: () => PromiseLike<T>): Promise<T> {
 		const operation = this.pending.then(task);
-		this.pending = operation.catch(() => undefined);
+		this.pending = operation.then(() => undefined, () => undefined);
 		return operation;
 	}
 }

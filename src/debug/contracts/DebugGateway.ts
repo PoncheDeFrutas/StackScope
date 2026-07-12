@@ -16,6 +16,14 @@ export interface ReadMemoryResult {
 	hasUnreadable: boolean;
 }
 
+export interface WriteMemoryResult {
+	offset: number;
+	bytesWritten: number;
+	error?: string;
+}
+
+export interface SetExpressionResult { value: string; }
+
 /**
  * Result of evaluating a single register.
  */
@@ -92,6 +100,16 @@ export interface DebugGateway {
 		offset: number,
 		count: number
 	): Promise<ReadMemoryResult | null>;
+
+	writeMemory(
+		sessionId: string,
+		memoryReference: string,
+		offset: number,
+		data: number[],
+		allowPartial: boolean
+	): Promise<WriteMemoryResult | null>;
+
+	setExpression(sessionId: string, expression: string, value: string, frameId?: number): Promise<SetExpressionResult | null>;
 
 	/**
 	 * Evaluates an expression and returns a memory reference if available.
