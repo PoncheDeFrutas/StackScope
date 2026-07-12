@@ -1,5 +1,10 @@
 import * as assert from 'assert';
-import { formatEditableMemoryValue, parseEditableMemoryValue } from '../webview/memoryEditValue.js';
+import {
+	formatEditableMemoryValue,
+	inferRegisterByteLength,
+	parseEditableMemoryValue,
+	parseRegisterInputValue,
+} from '../webview/memoryEditValue.js';
 
 suite('memoryEditValue', () => {
 	test('round-trips a multi-byte little-endian value', () => {
@@ -18,6 +23,25 @@ suite('memoryEditValue', () => {
 	test('writes only entered ASCII bytes', () => {
 		assert.deepStrictEqual(parseEditableMemoryValue('ABC', 4, 'little', 'ascii'), [0x41, 0x42, 0x43]);
 		assert.strictEqual(formatEditableMemoryValue([0x41, 0x42, 0x43], 'little', 'ascii'), 'ABC');
+	});
+
+	test('infers common register widths and falls back for unpadded zero', () => {
+		assert.strictEqual(inferRegisterByteLength('0xFF'), 1);
+		assert.strictEqual(inferRegisterByteLength('0x00000000'), 4);
+		assert.strictEqual(inferRegisterByteLength('0x0000000000000000'), 8);
+		assert.strictEqual(inferRegisterByteLength('0x0'), 8);
+	});
+
+	test('encodes register input as canonical hexadecimal expressions', () => {
+		assert.deepStrictEqual(parseRegisterInputValue('4660', 2, 'big', 'dec'), {
+			expression: '0x1234', bytes: [0x12, 0x34],
+		});
+		assert.deepStrictEqual(parseRegisterInputValue('ABC', 4, 'little', 'ascii'), {
+			expression: '0x00434241', bytes: [0x41, 0x42, 0x43, 0x00],
+		});
+		assert.deepStrictEqual(parseRegisterInputValue('$pc + 4', 8, 'little', 'raw'), {
+			expression: '$pc + 4', bytes: null,
+		});
 	});
 
 	test('round-trips a 128-bit big-endian value', () => {

@@ -39,6 +39,7 @@ export function RegisterPanel({
 	onEditRegister,
 }: RegisterPanelProps): JSX.Element {
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [hoveredExpression, setHoveredExpression] = useState<string | null>(null);
 
 	const selectedSet = registerSets.find((s) => s.id === selectedSetId);
 	const canEdit = Boolean(selectedSet && !selectedSet.isBuiltin);
@@ -144,29 +145,42 @@ export function RegisterPanel({
 					<table style={styles.table}>
 						<thead>
 							<tr>
-								<th style={styles.th}>Register</th>
-								<th style={styles.th}>Value</th>
+								<th scope="col" style={{ ...styles.th, ...styles.thLabel }}>Register</th>
+								<th scope="col" style={{ ...styles.th, ...styles.thValue }}>Value</th>
 							</tr>
 						</thead>
 						<tbody>
-							{registerValues.map((reg) => (
-								<tr key={reg.expression} style={{ ...styles.tr, opacity: isStale ? 0.65 : 1 }}>
-									<td style={styles.tdLabel}>{reg.expression}</td>
-									<td style={styles.tdValue}>
+							{registerValues.map((reg, index) => {
+								const isHovered = hoveredExpression === reg.expression;
+								const rowBackground = isHovered
+									? 'var(--vscode-list-hoverBackground)'
+									: index % 2 === 0 ? 'transparent' : 'rgba(127, 127, 127, 0.055)';
+								return (
+									<tr
+										key={reg.expression}
+										style={{ ...styles.tr, opacity: isStale ? 0.65 : 1, backgroundColor: rowBackground }}
+										onMouseEnter={() => setHoveredExpression(reg.expression)}
+										onMouseLeave={() => setHoveredExpression(null)}
+									>
+										<td style={{ ...styles.tdLabel, backgroundColor: rowBackground }}>{reg.expression}</td>
+										<td style={styles.tdValue}>
 										{reg.error ? (
 											<span style={styles.error} title={reg.error}>Error</span>
 										) : reg.value === null ? (
 											<span style={styles.unavailable}>--</span>
 										) : (
-											<span
-												style={{ ...styles.value, cursor: canEditRegisters ? 'pointer' : 'default' }}
-												onDoubleClick={() => canEditRegisters && onEditRegister(reg)}
-												title={canEditRegisters ? 'Double-click to edit register' : 'Debugger does not support writable register expressions'}
-											>{formatRegisterValue(reg.value, valueFormat)}</span>
+											<button
+												type="button"
+												disabled={!canEditRegisters}
+												style={styles.valueButton}
+												onClick={() => onEditRegister(reg)}
+												title={canEditRegisters ? 'Edit register value' : 'Debugger does not support writable register expressions'}
+											>{formatRegisterValue(reg.value, valueFormat)}</button>
 										)}
-									</td>
-								</tr>
-							))}
+										</td>
+									</tr>
+								);
+							})}
 						</tbody>
 					</table>
 				)}
@@ -256,7 +270,7 @@ const styles: Record<string, CSSProperties> = {
 	},
 	header: {
 		display: 'flex',
-		alignItems: 'flex-start',
+		alignItems: 'center',
 		justifyContent: 'space-between',
 		padding: '6px 8px',
 		borderBottom: '1px solid var(--vscode-widget-border)',
@@ -273,7 +287,9 @@ const styles: Record<string, CSSProperties> = {
 	},
 	select: {
 		width: '100%',
-		padding: '4px 8px',
+		minHeight: '30px',
+		boxSizing: 'border-box',
+		padding: '0 8px',
 		border: '1px solid var(--vscode-input-border)',
 		backgroundColor: 'var(--vscode-input-background)',
 		color: 'var(--vscode-input-foreground)',
@@ -282,7 +298,9 @@ const styles: Record<string, CSSProperties> = {
 	},
 	formatSelect: {
 		width: '100%',
-		padding: '4px 8px',
+		minHeight: '30px',
+		boxSizing: 'border-box',
+		padding: '0 8px',
 		border: '1px solid var(--vscode-input-border)',
 		backgroundColor: 'var(--vscode-input-background)',
 		color: 'var(--vscode-input-foreground)',
@@ -348,32 +366,63 @@ const styles: Record<string, CSSProperties> = {
 	},
 	th: {
 		textAlign: 'left',
-		padding: '4px 8px',
+		padding: '6px 10px',
 		borderBottom: '1px solid var(--vscode-widget-border)',
 		backgroundColor: 'var(--vscode-editor-background)',
 		position: 'sticky',
 		top: 0,
+		zIndex: 2,
 		fontWeight: 'normal',
 		color: 'var(--vscode-descriptionForeground)',
 	},
+	thLabel: {
+		left: 0,
+		zIndex: 3,
+		minWidth: '8ch',
+		borderRight: '1px solid var(--vscode-widget-border)',
+	},
+	thValue: {
+		textAlign: 'right',
+		minWidth: '12ch',
+	},
 	tr: {
-		transition: 'opacity 0.12s',
+		transition: 'background-color 0.12s, opacity 0.12s',
 	},
 	tdLabel: {
-		padding: '4px 8px',
+		position: 'sticky',
+		left: 0,
+		zIndex: 1,
+		minWidth: '8ch',
+		padding: '6px 10px',
 		borderBottom: '1px solid var(--vscode-widget-border)',
+		borderRight: '1px solid var(--vscode-widget-border)',
 		color: 'var(--vscode-symbolIcon-variableForeground)',
 		fontFamily: 'var(--vscode-editor-font-family)',
+		fontWeight: 600,
 		whiteSpace: 'nowrap',
 	},
 	tdValue: {
-		padding: '4px 8px',
+		minWidth: '12ch',
+		padding: '6px 10px',
 		borderBottom: '1px solid var(--vscode-widget-border)',
 		fontFamily: 'var(--vscode-editor-font-family)',
+		fontVariantNumeric: 'tabular-nums',
+		textAlign: 'right',
 		whiteSpace: 'nowrap',
 	},
 	value: {
 		color: 'var(--vscode-debugTokenExpression-number)',
+	},
+	valueButton: {
+		width: '100%',
+		padding: 0,
+		border: 'none',
+		background: 'transparent',
+		color: 'var(--vscode-debugTokenExpression-number)',
+		font: 'inherit',
+		fontVariantNumeric: 'tabular-nums',
+		textAlign: 'right',
+		cursor: 'pointer',
 	},
 	error: {
 		color: 'var(--vscode-errorForeground)',

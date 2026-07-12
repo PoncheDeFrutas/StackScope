@@ -8,6 +8,7 @@ import type {
 import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
 import { RegisterEditDialog } from './components/RegisterEditDialog.js';
+import type { Endianness } from '../domain/config/MemoryViewConfig.js';
 import { RegisterLoadGeneration } from './hooks/RegisterLoadGeneration.js';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
@@ -27,6 +28,7 @@ export function RegistersApp(): JSX.Element {
 	const [editingRegister, setEditingRegister] = useState<RegisterValueSnapshot | null>(null);
 	const [registerEditError, setRegisterEditError] = useState<string | null>(null);
 	const [isWritingRegister, setIsWritingRegister] = useState(false);
+	const [memoryEndianness, setMemoryEndianness] = useState<Endianness>('little');
 	const selectedSetIdRef = useRef(selectedSetId);
 	const sessionRef = useRef(session);
 	const mountedRef = useRef(false);
@@ -86,6 +88,7 @@ export function RegistersApp(): JSX.Element {
 			setRegisterSets(result.registerSets);
 			setSelectedSetId(result.selectedRegisterSetId);
 			setValueFormat(result.viewState?.registerValueFormat ?? 'hex');
+			setMemoryEndianness(result.viewState?.config.endianness ?? 'little');
 			setRegisterWriteSupported(result.registerWriteSupported);
 			if (result.session.status === 'stopped') {
 				await loadRegisters(result.selectedRegisterSetId);
@@ -119,10 +122,16 @@ export function RegistersApp(): JSX.Element {
 				void loadRegisters(selectedSetIdRef.current);
 			}
 		});
+		const unsubscribeDocument = messageBus.on('documentChanged', (payload) => {
+			if (payload.document) {
+				setMemoryEndianness(payload.document.config.endianness);
+			}
+		});
 
 		return () => {
 			unsubscribeSession();
 			unsubscribeCallStack();
+			unsubscribeDocument();
 		};
 	}, [initialize, loadRegisters]);
 
@@ -265,6 +274,8 @@ export function RegistersApp(): JSX.Element {
 				<RegisterEditDialog
 					expression={editingRegister.expression}
 					initialValue={editingRegister.value}
+					initialFormat={valueFormat}
+					endianness={memoryEndianness}
 					error={registerEditError}
 					isSubmitting={isWritingRegister}
 					onCancel={() => !isWritingRegister && setEditingRegister(null)}
