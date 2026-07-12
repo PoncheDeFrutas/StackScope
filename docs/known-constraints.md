@@ -27,5 +27,4 @@ These points are direct observations from current code.
 
 ## Miscellaneous observations
 
-- `src/webview/components/MemoryGrid.tsx` exists but `App.tsx` currently uses `VirtualMemoryGrid.tsx`.
 - In `formatDecodedByte` ASCII branch, the `byte === 0x20` case appears after printable-byte handling, so printable space is already handled by the first branch.
