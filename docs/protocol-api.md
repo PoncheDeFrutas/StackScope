@@ -38,6 +38,9 @@ MethodMap in src/protocol/methods.ts is source of truth.
 - selectRegisterSet
 - readRegisters
 - writeRegister
+- getWatchpointCandidate
+- createWatchpoint
+- removeWatchpoint
 
 ### View and debug navigation
 
@@ -56,6 +59,8 @@ EventMap in src/protocol/events.ts defines:
 - callStackChanged
 - disassemblyChanged
 - debugNavigationModeChanged
+- watchpointsChanged
+- watchpointHit
 
 ## Errors
 

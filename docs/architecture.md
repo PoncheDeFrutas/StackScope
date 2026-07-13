@@ -136,3 +136,5 @@ The webview hook `usePagedMemory` keeps page cache state. `MemoryLoadGeneration`
 Memory and Registers webviews each call `init` and receive shared session and call-stack events through `HostMessageRouter`. `App` owns memory target/configuration state; `RegistersApp` owns register set selection, values, editor state, and value format.
 
 `ViewStateService.save` preserves register-related fields already stored by the Registers view. `saveRegisterViewState` updates only the register value format. This prevents one webview from overwriting the other's persisted state.
+
+Watchpoints are owned by `DataWatchpointService`. It keeps DAP data breakpoints separate from GDB fallback watchpoints, preserves external adapter entries, and emits watchpoint changes and hits to both webviews.

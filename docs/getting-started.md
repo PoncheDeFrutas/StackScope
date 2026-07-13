@@ -11,6 +11,7 @@ This page describes how to use the extension based on current code.
 - Virtualized hex/decoded rendering backed by paged debugger reads.
 - Register inspection and write-back with selectable register sets and value formatting.
 - Memory editing in hex, decimal, octal, binary, or ASCII.
+- Register and memory watchpoints through DAP data breakpoints or the GDB fallback for supported `cppdbg` sessions.
 
 ## Requirements
 
@@ -49,6 +50,16 @@ Registered in `package.json` and wired in `src/host/commands/openMemoryViewComma
 11. Select a frame to reveal its source, switch the same tab to disassembly, and use that frame as the context for memory/register evaluation.
 12. Use `StackScope: Open Disassembly (Editor Tab)` if you want to open the same navigation tab directly in disassembly mode.
 13. Use the local mode switch in the navigation header to move between `Call Stack` and `Disassembly`.
+
+To create a watchpoint, pause execution and use the watch action beside a register value or on a selected memory range. StackScope queries DAP data breakpoint information first. With `cppdbg`, the GDB fallback is enabled only when the configuration uses `MIMode: "gdb"`; it maps write, read, and read/write modes to GDB watchpoint commands. Read and access watchpoints require hardware support from the target.
+
+## Watchpoint behavior
+
+- Watchpoints are available only while the debug session is stopped.
+- DAP-backed targets use the adapter-provided data ID and access types.
+- GDB-backed register targets use `watch`, `rwatch`, or `awatch` and display the native GDB message when creation fails.
+- Watchpoints are session-scoped and are removed when the debug session terminates.
+- The adapter may reject a register or run out of hardware watchpoint resources.
 
 Write controls appear only while session is stopped and active adapter reports write support. Memory writes are verified by re-reading target bytes; undo covers verified bytes only.
 

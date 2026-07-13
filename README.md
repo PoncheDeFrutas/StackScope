@@ -6,7 +6,7 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
   <img src="docs/assets/stackscope.png" width="160" alt="StackScope logo" />
 </p>
 
-![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Version](https://img.shields.io/badge/version-0.5.0-blue)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.110.0-007ACC)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
@@ -22,7 +22,7 @@ VS Code extension for inspecting debugger-backed memory during a stopped debug s
 
 ## What it does
 
-StackScope reads and writes debugger-backed memory through the active debug adapter, presenting it in virtualized hex and decoded view. Memory and registers have separate VS Code views. It also supports address expressions, register sets, memory presets, byte-change tracking, call-stack navigation, and disassembly navigation.
+StackScope reads and writes debugger-backed memory through the active debug adapter, presenting it in virtualized hex and decoded view. Memory and registers have separate VS Code views. It also supports address expressions, register sets, memory presets, byte-change tracking, register and memory watchpoints, call-stack navigation, and disassembly navigation.
 
 ## Requirements
 
@@ -40,6 +40,7 @@ Some workflows, including call stack and disassembly, also depend on adapter sup
 4. Scroll to load memory pages. Use Settings to change columns, unit size, number format, and total size.
 5. Open **StackScope: Focus Registers View** to inspect registers in its own Activity Bar view.
 6. When adapter write support is available, select memory bytes or a register value to edit it. Memory accepts hex, decimal, octal, binary, and ASCII; registers also accept a raw debugger expression.
+7. Select a register or memory range watch action while paused. DAP data breakpoints are used first; `cppdbg` sessions configured with GDB can use the GDB fallback when the adapter does not expose data breakpoints.
 
 ## Commands
 
@@ -69,7 +70,7 @@ Use **Run Extension** from .vscode/launch.json for an Extension Development Host
 
 ## Limitations
 
-Memory and register reads require stopped session. StackScope can only use DAP capabilities exposed by active debug adapter.
+Memory and register reads require stopped session. Watchpoint availability depends on the active adapter: DAP data breakpoints are preferred, while GDB register fallback requires `cppdbg` with `MIMode: "gdb"` and may be limited by hardware watchpoint resources.
 
 ## License
 

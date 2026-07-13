@@ -6,6 +6,24 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-12
+
+### Added
+
+- Added register and memory watchpoints backed by DAP `dataBreakpointInfo` and `setDataBreakpoints`.
+- Added GDB watchpoint fallback for supported `cppdbg`/GDB sessions, including write, read, and read/write access modes.
+- Added collapsible Registers and Watchpoints sections with hit highlighting and backend status.
+
+### Changed
+
+- Shared watchpoint dialog state between Memory and Registers webviews.
+- Restricted GDB fallback to verified GDB configurations and enabled strict unused-code checks.
+
+### Fixed
+
+- Preserved external DAP data breakpoints when StackScope watchpoints are added or removed.
+- Exposed precise adapter errors when a watchpoint cannot be created or hardware resources are exhausted.
+
 ## [0.4.0] - 2026-07-11
 
 ### Added

@@ -85,6 +85,7 @@ Separate webviews render `RegistersApp` for register inspection and `DebugNaviga
 - While session is not stopped, view shows pause message.
 - While stale, table opacity is reduced.
 - Refresh is manual and also triggered by `sessionChanged` stopped events and `callStackChanged` events.
+- Registers and Watchpoints are separate Explorer-style collapsible sections. The Watchpoints section shows backend, access mode, verification state, and hit highlighting.
 
 ## Memory and register writes
 
