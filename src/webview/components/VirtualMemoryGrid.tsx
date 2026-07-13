@@ -49,8 +49,6 @@ interface VirtualMemoryGridProps {
 	selection?: MemorySelection | null;
 	/** Called when the user changes the selected byte range. */
 	onSelectionChange?: (selection: MemorySelection | null) => void;
-	/** Previous data for comparison (baseline) */
-	previousData?: Map<number, number | null>;
 	canEditMemory?: boolean;
 	onEditCell?: (offset: number, bytes: number[]) => void;
 }
@@ -124,7 +122,6 @@ export function VirtualMemoryGrid({
 	changedBytes,
 	selection,
 	onSelectionChange,
-	previousData,
 	canEditMemory = false,
 	onEditCell,
 }: VirtualMemoryGridProps): JSX.Element {
