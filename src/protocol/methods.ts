@@ -71,6 +71,8 @@ export type RegisterValueFormat = 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
 /** State owned by the Registers webview. */
 export interface RegisterViewState {
 	registerValueFormat: RegisterValueFormat;
+	registersExpanded: boolean;
+	watchpointsExpanded: boolean;
 }
 
 /**
@@ -157,7 +159,41 @@ export interface InitResult {
 	viewState: ViewStateSnapshot | null;
 	memoryWriteSupported: boolean;
 	registerWriteSupported: boolean;
+	watchpointSupport: WatchpointSupportSnapshot;
+	watchpoints: WatchpointSnapshot[];
 }
+
+export type WatchpointAccessType = 'read' | 'write' | 'readWrite';
+
+export type WatchpointTarget =
+	| { kind: 'register'; expression: string; label: string }
+	| { kind: 'memory'; address: string; bytes: number };
+
+export interface WatchpointSupportSnapshot {
+	dataBreakpoints: boolean;
+	memoryRanges: boolean;
+	gdbRegisterFallback: boolean;
+}
+
+export type WatchpointBackend = 'dap' | 'gdb';
+
+export interface WatchpointSnapshot {
+	id: string;
+	target: WatchpointTarget;
+	description: string;
+	accessType: WatchpointAccessType;
+	verified: boolean;
+	backend: WatchpointBackend;
+	message?: string;
+	breakpointId?: number;
+}
+
+export interface GetWatchpointCandidateParams { target: WatchpointTarget; }
+export interface GetWatchpointCandidateResult { candidateId: string | null; description: string; accessTypes: WatchpointAccessType[]; backend: WatchpointBackend | null; }
+export interface CreateWatchpointParams { candidateId: string; accessType: WatchpointAccessType; }
+export interface CreateWatchpointResult { watchpoint: WatchpointSnapshot; }
+export interface RemoveWatchpointParams { id: string; }
+export interface RemoveWatchpointResult { success: boolean; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ReadMemory method
@@ -354,6 +390,8 @@ export interface SaveViewStateResult {
 
 export interface SaveRegisterViewStateParams {
 	registerValueFormat: RegisterViewState['registerValueFormat'];
+	registersExpanded?: boolean;
+	watchpointsExpanded?: boolean;
 }
 
 export interface SaveRegisterViewStateResult {
@@ -405,6 +443,9 @@ export type MethodName =
 	| 'readMemory' 
 	| 'writeMemory'
 	| 'writeRegister'
+	| 'getWatchpointCandidate'
+	| 'createWatchpoint'
+	| 'removeWatchpoint'
 	| 'openDocument'
 	| 'listDocuments'
 	| 'selectDocument'
@@ -433,6 +474,9 @@ export interface MethodMap {
 	readMemory: { params: ReadMemoryParams; result: ReadMemoryResult };
 	writeMemory: { params: WriteMemoryParams; result: WriteMemoryResult };
 	writeRegister: { params: WriteRegisterParams; result: WriteRegisterResult };
+	getWatchpointCandidate: { params: GetWatchpointCandidateParams; result: GetWatchpointCandidateResult };
+	createWatchpoint: { params: CreateWatchpointParams; result: CreateWatchpointResult };
+	removeWatchpoint: { params: RemoveWatchpointParams; result: RemoveWatchpointResult };
 	openDocument: { params: OpenDocumentParams; result: OpenDocumentResult };
 	listDocuments: { params: ListDocumentsParams; result: ListDocumentsResult };
 	selectDocument: { params: SelectDocumentParams; result: SelectDocumentResult };

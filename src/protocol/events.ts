@@ -5,6 +5,8 @@ import type {
 	DocumentSnapshot,
 	StackSelectionSnapshot,
 	StackThreadSnapshot,
+	WatchpointSnapshot,
+	WatchpointSupportSnapshot,
 } from './methods.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,7 +17,11 @@ export interface SessionChangedPayload {
 	session: SessionSnapshot;
 	memoryWriteSupported: boolean;
 	registerWriteSupported: boolean;
+	watchpointSupport: WatchpointSupportSnapshot;
 }
+
+export interface WatchpointsChangedPayload { watchpoints: WatchpointSnapshot[]; }
+export interface WatchpointHitPayload { watchpointIds: string[]; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Active document changed event
@@ -53,6 +59,8 @@ export interface DebugNavigationModeChangedPayload {
 
 export type EventName =
 	| 'sessionChanged'
+	| 'watchpointsChanged'
+	| 'watchpointHit'
 	| 'documentChanged'
 	| 'callStackChanged'
 	| 'disassemblyChanged'
@@ -63,6 +71,8 @@ export type EventName =
  */
 export interface EventMap {
 	sessionChanged: SessionChangedPayload;
+	watchpointsChanged: WatchpointsChangedPayload;
+	watchpointHit: WatchpointHitPayload;
 	documentChanged: DocumentChangedPayload;
 	callStackChanged: CallStackChangedPayload;
 	disassemblyChanged: DisassemblyChangedPayload;
