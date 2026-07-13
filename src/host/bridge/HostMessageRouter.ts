@@ -19,7 +19,9 @@ import { registerDocumentHandlers } from './handlers/registerDocumentHandlers.js
 import { registerNavigationHandlers } from './handlers/registerNavigationHandlers.js';
 import { registerRegisterStateHandlers } from './handlers/registerRegisterStateHandlers.js';
 import { registerWorkspaceHandlers } from './handlers/registerWorkspaceHandlers.js';
-import type { HandlerRegistry, MethodHandler } from './handlers/types.js';
+import { registerWatchpointHandlers } from './handlers/registerWatchpointHandlers.js';
+import type { DataWatchpointService } from '../services/DataWatchpointService.js';
+import type { HandlerRegistry } from './handlers/types.js';
 
 /**
  * Routes typed protocol messages and broadcasts host events to attached webviews.
@@ -40,7 +42,8 @@ export class HostMessageRouter {
 		private readonly stackSelectionService: StackSelectionService,
 		private readonly viewStateService: ViewStateService,
 		private readonly capabilities: DapCapabilitiesService,
-		private readonly debugMutations: DebugMutationService
+		private readonly debugMutations: DebugMutationService,
+		private readonly dataWatchpoints: DataWatchpointService
 	) {
 		this.navigation = new DebugNavigationController(
 			this.sessionTracker,
@@ -58,6 +61,8 @@ export class HostMessageRouter {
 			this.debugMutations
 		);
 		this.capabilities.onDidChange((sessionId) => this.navigation.handleCapabilitiesChanged(sessionId));
+		this.dataWatchpoints.onDidChange(({ watchpoints }) => this.sendEvent('watchpointsChanged', { watchpoints }));
+		this.dataWatchpoints.onDidHit(({ watchpointIds }) => this.sendEvent('watchpointHit', { watchpointIds }));
 		this.registerHandlers();
 	}
 
@@ -110,6 +115,7 @@ export class HostMessageRouter {
 			registerSetService: this.registerSetService,
 			viewStateService: this.viewStateService,
 			capabilities: this.capabilities,
+			dataWatchpoints: this.dataWatchpoints,
 		});
 		registerRegisterStateHandlers(this.handlers, {
 			sessionTracker: this.sessionTracker,
@@ -120,6 +126,9 @@ export class HostMessageRouter {
 			getSelectedFrameId: (sessionId) => this.navigation.getSelectedFrameId(sessionId),
 		});
 		registerNavigationHandlers(this.handlers, this.navigation);
+		registerWatchpointHandlers(this.handlers, {
+			dataWatchpoints: this.dataWatchpoints,
+		});
 	}
 
 	private async handleMessage(webview: vscode.Webview, message: unknown): Promise<void> {

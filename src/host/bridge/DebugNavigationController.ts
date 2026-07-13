@@ -44,10 +44,12 @@ export class DebugNavigationController {
 
 	private emitSessionChanged(state: SessionState): void {
 		const support = state.sessionId ? this.capabilities?.getWriteSupport(state.sessionId) : undefined;
+		const watchpointSupport = state.sessionId ? this.capabilities?.getDataBreakpointSupport(state.sessionId) : undefined;
 		this.sendEvent('sessionChanged', {
 			session: { sessionId: state.sessionId, status: state.status },
 			memoryWriteSupported: support?.memory ?? false,
 			registerWriteSupported: support?.register ?? false,
+			watchpointSupport: watchpointSupport ?? { dataBreakpoints: false, memoryRanges: false, gdbRegisterFallback: false },
 		});
 	}
 

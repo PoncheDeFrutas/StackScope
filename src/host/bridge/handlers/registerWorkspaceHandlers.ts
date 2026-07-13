@@ -4,6 +4,7 @@ import type { RegisterSetService } from '../../services/RegisterSetService.js';
 import type { ViewStateService } from '../../services/ViewStateService.js';
 import type { MemoryDocumentService } from '../../services/MemoryDocumentService.js';
 import type { DapCapabilitiesService } from '../../../debug/dap/DapCapabilitiesService.js';
+import type { DataWatchpointService } from '../../services/DataWatchpointService.js';
 import { toPresetSnapshot, toRegisterSetSnapshot } from './snapshots.js';
 import { setHandler, type HandlerRegistry } from './types.js';
 
@@ -14,6 +15,7 @@ export interface WorkspaceHandlerDependencies {
 	registerSetService: RegisterSetService;
 	viewStateService: ViewStateService;
 	capabilities: DapCapabilitiesService;
+	dataWatchpoints: DataWatchpointService;
 }
 
 export function registerWorkspaceHandlers(
@@ -27,6 +29,7 @@ export function registerWorkspaceHandlers(
 		registerSetService,
 		viewStateService,
 		capabilities,
+		dataWatchpoints,
 	} = dependencies;
 
 	setHandler(handlers, 'init', async () => {
@@ -42,6 +45,8 @@ export function registerWorkspaceHandlers(
 			viewState: viewStateService.get(),
 			memoryWriteSupported: state.sessionId ? capabilities.getWriteSupport(state.sessionId).memory : false,
 			registerWriteSupported: state.sessionId ? capabilities.getWriteSupport(state.sessionId).register : false,
+			watchpointSupport: state.sessionId ? capabilities.getDataBreakpointSupport(state.sessionId) : { dataBreakpoints: false, memoryRanges: false, gdbRegisterFallback: false },
+			watchpoints: dataWatchpoints.list(state.sessionId),
 		};
 	});
 

@@ -99,8 +99,8 @@ export function registerRegisterStateHandlers(
 		await viewStateService.save(viewState);
 		return { success: true };
 	});
-	setHandler(handlers, 'saveRegisterViewState', async ({ registerValueFormat }) => {
-		await viewStateService.saveRegisterViewState(registerValueFormat);
+	setHandler(handlers, 'saveRegisterViewState', async ({ registerValueFormat, registersExpanded, watchpointsExpanded }) => {
+		await viewStateService.saveRegisterViewState({ registerValueFormat, registersExpanded, watchpointsExpanded });
 		return { success: true };
 	});
 }

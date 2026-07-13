@@ -12,6 +12,7 @@ import { StackSelectionService } from '../services/StackSelectionService.js';
 import { ViewStateService } from '../services/ViewStateService.js';
 import { EditorTabService } from '../services/EditorTabService.js';
 import { DebugMutationService } from '../services/DebugMutationService.js';
+import { DataWatchpointService } from '../services/DataWatchpointService.js';
 
 /**
  * Container for all host-level services.
@@ -21,6 +22,7 @@ export interface HostServices {
 	debugGateway: DapDebugGateway;
 	capabilities: DapCapabilitiesService;
 	debugMutations: DebugMutationService;
+	dataWatchpoints: DataWatchpointService;
 	documentRegistry: DocumentRegistry;
 	presetService: PresetService;
 	registerSetService: RegisterSetService;
@@ -48,6 +50,16 @@ export function createHostServices(
 	const presetService = new PresetService(context);
 	const registerSetService = new RegisterSetService(context);
 	const stackSelectionService = new StackSelectionService();
+	const dataWatchpoints = new DataWatchpointService(
+		sessionTracker,
+		debugGateway,
+		capabilities,
+		debugMutations,
+		(sessionId) => {
+			const selection = stackSelectionService.get();
+			return selection.sessionId === sessionId ? selection.frameId ?? undefined : undefined;
+		}
+	);
 	const viewStateService = new ViewStateService(context);
 	const editorTabService = new EditorTabService(extensionUri);
 	const messageRouter = new HostMessageRouter(
@@ -59,7 +71,8 @@ export function createHostServices(
 		stackSelectionService,
 		viewStateService,
 		capabilities,
-		debugMutations
+		debugMutations,
+		dataWatchpoints
 	);
 	editorTabService.setRouter(messageRouter);
 	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
@@ -70,6 +83,7 @@ export function createHostServices(
 		debugGateway,
 		capabilities,
 		debugMutations,
+		dataWatchpoints,
 		documentRegistry,
 		presetService,
 		registerSetService,
