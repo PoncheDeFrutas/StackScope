@@ -44,10 +44,11 @@ export class ViewStateService {
 	}
 
 	saveRegisterViewState(
-		registerValueFormat: RegisterViewState['registerValueFormat']
+		viewState: RegisterViewState['registerValueFormat'] | (Partial<RegisterViewState> & Pick<RegisterViewState, 'registerValueFormat'>)
 	): Thenable<void> {
+		const next = typeof viewState === 'string' ? { registerValueFormat: viewState } : viewState;
 		return this.enqueueUpdate((current) =>
-			mergeRegisterValueFormat(current, registerValueFormat)
+			mergeRegisterViewState(current, next)
 		);
 	}
 
@@ -83,6 +84,18 @@ export function mergeRegisterValueFormat(
 	};
 }
 
+export function mergeRegisterViewState(
+	current: ViewStateSnapshot | null,
+	viewState: Partial<RegisterViewState> & Pick<RegisterViewState, 'registerValueFormat'>
+): ViewStateSnapshot {
+	const base = mergeRegisterValueFormat(current, viewState.registerValueFormat);
+	return {
+		...base,
+		registersExpanded: typeof viewState.registersExpanded === 'boolean' ? viewState.registersExpanded : base.registersExpanded,
+		watchpointsExpanded: typeof viewState.watchpointsExpanded === 'boolean' ? viewState.watchpointsExpanded : base.watchpointsExpanded,
+	};
+}
+
 export function sanitizeViewState(value: unknown): ViewStateSnapshot | null {
 	const memoryViewState = sanitizeMemoryViewState(value);
 	if (!memoryViewState || !isRecord(value)) {
@@ -94,6 +107,8 @@ export function sanitizeViewState(value: unknown): ViewStateSnapshot | null {
 		showRegisterPanel: typeof value.showRegisterPanel === 'boolean' ? value.showRegisterPanel : true,
 		registerPanelWidth: sanitizeRegisterPanelWidth(value.registerPanelWidth),
 		registerValueFormat: sanitizeRegisterValueFormat(value.registerValueFormat),
+		registersExpanded: typeof value.registersExpanded === 'boolean' ? value.registersExpanded : true,
+		watchpointsExpanded: typeof value.watchpointsExpanded === 'boolean' ? value.watchpointsExpanded : false,
 	};
 }
 
@@ -116,6 +131,8 @@ function createDefaultViewState(): ViewStateSnapshot {
 		showRegisterPanel: true,
 		registerPanelWidth: DEFAULT_REGISTER_PANEL_WIDTH,
 		registerValueFormat: 'hex',
+		registersExpanded: true,
+		watchpointsExpanded: false,
 	};
 }
 

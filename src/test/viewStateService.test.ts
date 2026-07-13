@@ -29,6 +29,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: false,
 			registerPanelWidth: 420,
 			registerValueFormat: 'bin',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 
 		assert.deepStrictEqual(result, {
@@ -45,6 +47,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: false,
 			registerPanelWidth: 420,
 			registerValueFormat: 'bin',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 	});
 
@@ -75,6 +79,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: true,
 			registerPanelWidth: 320,
 			registerValueFormat: 'hex',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 	});
 
@@ -86,6 +92,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: false,
 			registerPanelWidth: 400,
 			registerValueFormat: 'hex',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 
 		const result = mergeRegisterValueFormat(current, 'dec');
@@ -107,6 +115,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: true,
 			registerPanelWidth: 320,
 			registerValueFormat: 'hex',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 	});
 
@@ -118,6 +128,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: false,
 			registerPanelWidth: 400,
 			registerValueFormat: 'dec',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 		const next = {
 			currentTarget: '$pc',
@@ -171,6 +183,8 @@ suite('ViewStateService', () => {
 			showRegisterPanel: true,
 			registerPanelWidth: 320,
 			registerValueFormat: 'dec',
+			registersExpanded: true,
+			watchpointsExpanded: false,
 		});
 	});
 });
