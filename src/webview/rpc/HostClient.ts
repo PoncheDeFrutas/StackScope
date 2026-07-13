@@ -19,12 +19,16 @@ import type {
 	RegisterItemSnapshot,
 	MemoryViewState,
 	RegisterViewState,
-	ViewStateSnapshot,
 	SaveViewStateResult,
 	SaveRegisterViewStateResult,
 	ListCallStackResult,
 	SelectStackFrameResult,
 	GetDisassemblyResult,
+	GetWatchpointCandidateResult,
+	CreateWatchpointResult,
+	RemoveWatchpointResult,
+	WatchpointAccessType,
+	WatchpointTarget,
 } from '../../protocol/methods.js';
 import type { MemoryViewConfig } from '../../domain/config/MemoryViewConfig.js';
 
@@ -59,6 +63,18 @@ export const HostClient = {
 
 	async writeRegister(expression: string, value: string) {
 		return messageBus.request('writeRegister', { expression, value }, MEMORY_READ_TIMEOUT_MS);
+	},
+
+	async getWatchpointCandidate(target: WatchpointTarget): Promise<GetWatchpointCandidateResult> {
+		return messageBus.request('getWatchpointCandidate', { target });
+	},
+
+	async createWatchpoint(candidateId: string, accessType: WatchpointAccessType): Promise<CreateWatchpointResult> {
+		return messageBus.request('createWatchpoint', { candidateId, accessType });
+	},
+
+	async removeWatchpoint(id: string): Promise<RemoveWatchpointResult> {
+		return messageBus.request('removeWatchpoint', { id });
 	},
 
 	/**
@@ -196,9 +212,10 @@ export const HostClient = {
 	 * Persists register-view state without replacing memory-view state.
 	 */
 	async saveRegisterViewState(
-		registerValueFormat: RegisterViewState['registerValueFormat']
+		registerValueFormat: RegisterViewState['registerValueFormat'],
+		sections?: Pick<RegisterViewState, 'registersExpanded' | 'watchpointsExpanded'>
 	): Promise<SaveRegisterViewStateResult> {
-		return messageBus.request('saveRegisterViewState', { registerValueFormat });
+		return messageBus.request('saveRegisterViewState', { registerValueFormat, ...sections });
 	},
 
 	/**

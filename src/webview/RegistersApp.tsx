@@ -4,10 +4,17 @@ import type {
 	RegisterSetSnapshot,
 	RegisterValueSnapshot,
 	SessionSnapshot,
+	WatchpointSnapshot,
+	WatchpointSupportSnapshot,
+	WatchpointTarget,
 } from '../protocol/methods.js';
 import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
 import { RegisterEditDialog } from './components/RegisterEditDialog.js';
+import { WatchpointDialog } from './components/WatchpointDialog.js';
+import { WatchpointsPanel } from './components/WatchpointsPanel.js';
+import { ExplorerSection } from './components/ExplorerSection.js';
+import { useWatchpointDialog } from './hooks/useWatchpointDialog.js';
 import type { Endianness } from '../domain/config/MemoryViewConfig.js';
 import { RegisterLoadGeneration } from './hooks/RegisterLoadGeneration.js';
 import { HostClient } from './rpc/HostClient.js';
@@ -29,6 +36,11 @@ export function RegistersApp(): JSX.Element {
 	const [registerEditError, setRegisterEditError] = useState<string | null>(null);
 	const [isWritingRegister, setIsWritingRegister] = useState(false);
 	const [memoryEndianness, setMemoryEndianness] = useState<Endianness>('little');
+	const [watchpointSupport, setWatchpointSupport] = useState<WatchpointSupportSnapshot>({ dataBreakpoints: false, memoryRanges: false, gdbRegisterFallback: false });
+	const [watchpoints, setWatchpoints] = useState<WatchpointSnapshot[]>([]);
+	const [registersExpanded, setRegistersExpanded] = useState(true);
+	const [watchpointsExpanded, setWatchpointsExpanded] = useState(false);
+	const [hitWatchpointIds, setHitWatchpointIds] = useState<string[]>([]);
 	const selectedSetIdRef = useRef(selectedSetId);
 	const sessionRef = useRef(session);
 	const mountedRef = useRef(false);
@@ -90,6 +102,10 @@ export function RegistersApp(): JSX.Element {
 			setValueFormat(result.viewState?.registerValueFormat ?? 'hex');
 			setMemoryEndianness(result.viewState?.config.endianness ?? 'little');
 			setRegisterWriteSupported(result.registerWriteSupported);
+			setWatchpointSupport(result.watchpointSupport);
+			setWatchpoints(result.watchpoints);
+			setRegistersExpanded(result.viewState?.registersExpanded ?? true);
+			setWatchpointsExpanded(result.viewState?.watchpointsExpanded ?? false);
 			if (result.session.status === 'stopped') {
 				await loadRegisters(result.selectedRegisterSetId);
 			}
@@ -109,6 +125,7 @@ export function RegistersApp(): JSX.Element {
 			sessionRef.current = payload.session;
 			setSession(payload.session);
 			setRegisterWriteSupported(payload.registerWriteSupported);
+			setWatchpointSupport(payload.watchpointSupport);
 			if (payload.session.status === 'stopped') {
 				void loadRegisters(selectedSetIdRef.current);
 			} else {
@@ -127,11 +144,17 @@ export function RegistersApp(): JSX.Element {
 				setMemoryEndianness(payload.document.config.endianness);
 			}
 		});
+		const unsubscribeWatchpoints = messageBus.on('watchpointsChanged', (payload) => setWatchpoints(payload.watchpoints));
+		const unsubscribeWatchpointHit = messageBus.on('watchpointHit', (payload) => {
+			setHitWatchpointIds(payload.watchpointIds);
+		});
 
 		return () => {
 			unsubscribeSession();
 			unsubscribeCallStack();
 			unsubscribeDocument();
+			unsubscribeWatchpoints();
+			unsubscribeWatchpointHit();
 		};
 	}, [initialize, loadRegisters]);
 
@@ -175,6 +198,47 @@ export function RegistersApp(): JSX.Element {
 		setEditingRegister(register);
 		setRegisterEditError(null);
 	}, [isWritingRegister]);
+
+	const saveSections = useCallback((nextRegisters: boolean, nextWatchpoints: boolean) => {
+		void HostClient.saveRegisterViewState(valueFormat, { registersExpanded: nextRegisters, watchpointsExpanded: nextWatchpoints });
+	}, [valueFormat]);
+
+	const handleRegistersExpandedChange = useCallback((expanded: boolean) => {
+		setRegistersExpanded(expanded);
+		saveSections(expanded, watchpointsExpanded);
+	}, [saveSections, watchpointsExpanded]);
+
+	const handleWatchpointsExpandedChange = useCallback((expanded: boolean) => {
+		setWatchpointsExpanded(expanded);
+		saveSections(registersExpanded, expanded);
+	}, [registersExpanded, saveSections]);
+
+	useEffect(() => {
+		if (hitWatchpointIds.length > 0) {
+			handleWatchpointsExpandedChange(true);
+		}
+	}, [handleWatchpointsExpandedChange, hitWatchpointIds]);
+
+	const handleWatchpointCreated = useCallback((watchpoint: WatchpointSnapshot) => {
+		setWatchpoints((previous) => previous.some((item) => item.id === watchpoint.id)
+			? previous.map((item) => item.id === watchpoint.id ? watchpoint : item)
+			: [...previous, watchpoint]);
+		handleWatchpointsExpandedChange(true);
+	}, [handleWatchpointsExpandedChange]);
+
+	const watchpointDialog = useWatchpointDialog(handleWatchpointCreated);
+
+	const handleAddWatchpoint = useCallback(async (register: RegisterValueSnapshot) => {
+		if (register.value === null || sessionRef.current.status !== 'stopped') return;
+		const target: WatchpointTarget = { kind: 'register', expression: register.expression, label: register.label };
+		if (!await watchpointDialog.prepare(target)) {
+			handleWatchpointsExpandedChange(true);
+		}
+	}, [handleWatchpointsExpandedChange, watchpointDialog]);
+
+	const handleRemoveWatchpoint = useCallback((id: string) => {
+		void HostClient.removeWatchpoint(id).catch((error) => watchpointDialog.setError(error instanceof Error ? error.message : 'Failed to remove watchpoint'));
+	}, [watchpointDialog]);
 
 	const handleConfirmRegisterEdit = useCallback(async (value: string) => {
 		if (!editingRegister || isWritingRegister) return;
@@ -244,8 +308,16 @@ export function RegistersApp(): JSX.Element {
 		[editingSet, handleRefresh, handleSelectSet]
 	);
 
+	const watchpointDisabledReason = session.status !== 'stopped'
+		? 'Pause execution before setting a watchpoint.'
+		: !watchpointSupport.dataBreakpoints && !watchpointSupport.gdbRegisterFallback
+			? 'This debugger does not support register watchpoints.'
+			: watchpointDialog.isSubmitting ? 'A watchpoint is being configured.' : null;
+
 	return (
 		<div style={styles.container}>
+			<div style={styles.viewContent}>
+			<ExplorerSection id="stackscope-registers" label="REGISTERS" expanded={registersExpanded} onExpandedChange={handleRegistersExpandedChange}>
 			<RegisterPanel
 				registerSets={registerSets}
 				selectedSetId={selectedSetId}
@@ -262,7 +334,15 @@ export function RegistersApp(): JSX.Element {
 				onDeleteSet={handleDeleteSet}
 				canEditRegisters={registerWriteSupported && session.status === 'stopped' && !isWritingRegister}
 				onEditRegister={handleEditRegister}
+				canWatchRegisters={(watchpointSupport.dataBreakpoints || watchpointSupport.gdbRegisterFallback) && session.status === 'stopped' && !watchpointDialog.isSubmitting}
+				watchpointDisabledReason={watchpointDisabledReason}
+				onAddWatchpoint={handleAddWatchpoint}
 			/>
+			</ExplorerSection>
+			<ExplorerSection id="stackscope-watchpoints" label="WATCHPOINTS" count={watchpoints.length} expanded={watchpointsExpanded} onExpandedChange={handleWatchpointsExpandedChange}>
+				<WatchpointsPanel watchpoints={watchpoints} support={watchpointSupport} hitIds={hitWatchpointIds} error={watchpointDialog.error} onRemove={handleRemoveWatchpoint} />
+			</ExplorerSection>
+			</div>
 			{editingSet !== null && (
 				<RegisterSetEditor
 					editingSet={editingSet === 'new' ? null : editingSet}
@@ -270,6 +350,7 @@ export function RegistersApp(): JSX.Element {
 					onCancel={() => setEditingSet(null)}
 				/>
 			)}
+			{watchpointDialog.dialog && <WatchpointDialog target={watchpointDialog.dialog.target} backend={watchpointDialog.dialog.backend} description={watchpointDialog.dialog.description} accessTypes={watchpointDialog.dialog.accessTypes} error={watchpointDialog.error} isSubmitting={watchpointDialog.isSubmitting} onCancel={watchpointDialog.cancel} onConfirm={watchpointDialog.confirm} />}
 			{editingRegister && editingRegister.value !== null && (
 				<RegisterEditDialog
 					expression={editingRegister.expression}
@@ -294,4 +375,5 @@ const styles = {
 		minHeight: 0,
 		overflow: 'hidden',
 	},
+	viewContent: { flex: 1, minHeight: 0, overflow: 'auto' },
 };

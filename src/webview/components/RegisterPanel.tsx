@@ -19,6 +19,9 @@ interface RegisterPanelProps {
 	onDeleteSet: (setId: string) => void;
 	canEditRegisters: boolean;
 	onEditRegister: (register: RegisterValueSnapshot) => void;
+	canWatchRegisters: boolean;
+	watchpointDisabledReason: string | null;
+	onAddWatchpoint: (register: RegisterValueSnapshot) => void;
 }
 
 export function RegisterPanel({
@@ -37,6 +40,9 @@ export function RegisterPanel({
 	onDeleteSet,
 	canEditRegisters,
 	onEditRegister,
+	canWatchRegisters,
+	watchpointDisabledReason,
+	onAddWatchpoint,
 }: RegisterPanelProps): JSX.Element {
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [hoveredExpression, setHoveredExpression] = useState<string | null>(null);
@@ -169,13 +175,23 @@ export function RegisterPanel({
 										) : reg.value === null ? (
 											<span style={styles.unavailable}>--</span>
 										) : (
-											<button
+											<div style={styles.valueActions}><button
 												type="button"
 												disabled={!canEditRegisters}
 												style={styles.valueButton}
 												onClick={() => onEditRegister(reg)}
 												title={canEditRegisters ? 'Edit register value' : 'Debugger does not support writable register expressions'}
 											>{formatRegisterValue(reg.value, valueFormat)}</button>
+													<button
+														type="button"
+														disabled={!canWatchRegisters}
+														style={{ ...styles.watchButton, ...(!canWatchRegisters ? styles.watchButtonDisabled : {}) }}
+														onClick={() => onAddWatchpoint(reg)}
+														title={canWatchRegisters ? 'Set watchpoint' : watchpointDisabledReason ?? 'Watchpoint unavailable'}
+														aria-label={`Set watchpoint for ${reg.label}`}
+													>
+														<WatchIcon />
+													</button></div>
 										)}
 										</td>
 									</tr>
@@ -260,13 +276,18 @@ function RefreshIcon(): JSX.Element {
 	);
 }
 
+function WatchIcon(): JSX.Element {
+	return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
+		<circle cx="8" cy="8" r="4.25" />
+		<path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" />
+	</svg>;
+}
+
 const styles: Record<string, CSSProperties> = {
 	container: {
 		display: 'flex',
 		flexDirection: 'column',
-		height: '100%',
 		minHeight: 0,
-		backgroundColor: 'var(--vscode-editor-background)',
 	},
 	header: {
 		display: 'flex',
@@ -353,8 +374,6 @@ const styles: Record<string, CSSProperties> = {
 		borderRadius: '2px',
 	},
 	tableContainer: {
-		flex: 1,
-		overflow: 'auto',
 		minHeight: 0,
 	},
 	table: {
@@ -424,6 +443,9 @@ const styles: Record<string, CSSProperties> = {
 		textAlign: 'right',
 		cursor: 'pointer',
 	},
+	valueActions: { display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' },
+	watchButton: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, padding: 0, border: 'none', borderRadius: 3, background: 'transparent', color: 'var(--vscode-foreground)', cursor: 'pointer' },
+	watchButtonDisabled: { color: 'var(--vscode-disabledForeground)', cursor: 'default' },
 	error: {
 		color: 'var(--vscode-errorForeground)',
 		fontStyle: 'italic',

@@ -21,6 +21,8 @@ interface ToolbarProps {
 	currentTarget: string;
 	hasActiveDocument: boolean;
 	selectedByteCount: number;
+	canWatchSelection: boolean;
+	onWatchSelection: () => void;
 }
 
 /**
@@ -45,6 +47,8 @@ export function Toolbar({
 	currentTarget,
 	hasActiveDocument,
 	selectedByteCount,
+	canWatchSelection,
+	onWatchSelection,
 }: ToolbarProps): JSX.Element {
 	const [target, setTarget] = useState('');
 	const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -252,6 +256,15 @@ export function Toolbar({
 					<RefreshIcon />
 				</button>
 				<button
+					onClick={onWatchSelection}
+					disabled={!canWatchSelection}
+					style={styles.smallIconButton}
+					title={canWatchSelection ? `Set watchpoint for ${selectedByteCount} selected bytes` : 'Select a numeric memory range supported by the debugger'}
+					aria-label="Set memory watchpoint"
+				>
+					<WatchIcon />
+				</button>
+				<button
 					onClick={onUndoMemoryWrite}
 					disabled={!canUndoMemoryWrite}
 					style={styles.smallIconButton}
@@ -369,6 +382,10 @@ function UndoIcon(): JSX.Element {
 			<path d="M5.5 3.5 2 7l3.5 3.5.7-.7-2.3-2.3H9a3 3 0 1 1 0 6H8v1h1a4 4 0 0 0 0-8H3.9L6.2 4.2l-.7-.7z" />
 		</svg>
 	);
+}
+
+function WatchIcon(): JSX.Element {
+	return <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2.1A4.9 4.9 0 1 1 8 12.9 4.9 4.9 0 0 1 8 3.1zM7 5v3.7l2.8 1.7.7-1.2-2.1-1.3V5H7z" /></svg>;
 }
 
 const styles: Record<string, CSSProperties> = {

@@ -9,6 +9,8 @@ import { usePagedMemory } from './hooks/usePagedMemory.js';
 import { useMemoryViewStatePersistence } from './hooks/useMemoryViewStatePersistence.js';
 import { useMemoryEditing } from './hooks/useMemoryEditing.js';
 import { MemoryEditDialog } from './components/MemoryEditDialog.js';
+import { WatchpointDialog } from './components/WatchpointDialog.js';
+import { useWatchpointDialog } from './hooks/useWatchpointDialog.js';
 import { formatMemoryAddress, parseMemoryAddress } from './memoryAddress.js';
 import {
 	captureBaselineFromPages,
@@ -20,6 +22,8 @@ import type {
 	SessionSnapshot,
 	DocumentSnapshot,
 	PresetSnapshot,
+	WatchpointSupportSnapshot,
+	WatchpointTarget,
 } from '../protocol/methods.js';
 import type { MemoryViewConfig } from '../domain/config/MemoryViewConfig.js';
 import { DEFAULT_CONFIG } from '../domain/config/MemoryViewConfig.js';
@@ -40,6 +44,8 @@ export function App(): JSX.Element {
 	const [showSettings, setShowSettings] = useState(false);
 	const [currentTarget, setCurrentTarget] = useState('');
 	const [memoryWriteSupported, setMemoryWriteSupported] = useState(false);
+	const [watchpointSupport, setWatchpointSupport] = useState<WatchpointSupportSnapshot>({ dataBreakpoints: false, memoryRanges: false, gdbRegisterFallback: false });
+	const watchpointDialog = useWatchpointDialog();
 
 	const [viewStateReady, setViewStateReady] = useState(false);
 	const configRef = useRef(config);
@@ -76,6 +82,7 @@ export function App(): JSX.Element {
 		// Subscribe to session changes
 		const unsubSession = messageBus.on('sessionChanged', (payload) => {
 			setMemoryWriteSupported(payload.memoryWriteSupported);
+			setWatchpointSupport(payload.watchpointSupport);
 			setState((prev) => {
 				if (payload.session.status === 'none' || !payload.session.sessionId) {
 					restoreAttemptSessionIdRef.current = null;
@@ -215,6 +222,7 @@ export function App(): JSX.Element {
 			// Store presets from init
 			setPresets(result.presets);
 			setMemoryWriteSupported(result.memoryWriteSupported);
+			setWatchpointSupport(result.watchpointSupport);
 
 			setConfig(restoredConfig);
 			setShowSettings(restoredViewState?.showSettings ?? false);
@@ -487,6 +495,16 @@ export function App(): JSX.Element {
 		pagedMemory.loadRange(startOffset, endOffset);
 	}, [pagedMemory]);
 
+	const handleWatchSelection = useCallback(async () => {
+		if (!memorySelection || state.phase !== 'ready' || !/^0x[0-9a-f]+$/i.test(state.document.address)) return;
+		const target: WatchpointTarget = {
+			kind: 'memory',
+			address: formatMemoryAddress(parseMemoryAddress(state.document.address) + BigInt(memorySelection.startOffset)),
+			bytes: memorySelection.endOffset - memorySelection.startOffset + 1,
+		};
+		await watchpointDialog.prepare(target);
+	}, [memorySelection, state, watchpointDialog]);
+
 	const sessionStatus = 'session' in state ? state.session.status : 'none';
 	const isLoading = state.phase === 'loading' || state.phase === 'opening-document' || pagedMemory.isLoading;
 	const changedByteCount = getChangedByteCount(changedBytes);
@@ -495,6 +513,10 @@ export function App(): JSX.Element {
 	const selectedByteCount = memorySelection
 		? memorySelection.endOffset - memorySelection.startOffset + 1
 		: 0;
+	const canWatchSelection = Boolean(
+		memorySelection && activeDocument && /^0x[0-9a-f]+$/i.test(activeDocument.address) &&
+		watchpointSupport.memoryRanges && sessionStatus === 'stopped' && !watchpointDialog.isSubmitting
+	);
 
 	return (
 		<div style={styles.container}>
@@ -517,6 +539,8 @@ export function App(): JSX.Element {
 				currentTarget={currentTarget}
 				hasActiveDocument={activeDocument !== null}
 				selectedByteCount={selectedByteCount}
+				canWatchSelection={canWatchSelection}
+				onWatchSelection={handleWatchSelection}
 			/>
 			{showSettings && (
 				<SettingsPanel
@@ -557,6 +581,7 @@ export function App(): JSX.Element {
 					onConfirm={(data) => void memoryEditing.submitEdit(data)}
 				/>
 			)}
+			{watchpointDialog.dialog && <WatchpointDialog target={watchpointDialog.dialog.target} backend={watchpointDialog.dialog.backend} description={watchpointDialog.dialog.description} accessTypes={watchpointDialog.dialog.accessTypes} error={watchpointDialog.error} isSubmitting={watchpointDialog.isSubmitting} onCancel={watchpointDialog.cancel} onConfirm={watchpointDialog.confirm} />}
 			<StatusBar
 				status={sessionStatus}
 				sessionId={'session' in state ? state.session.sessionId : null}

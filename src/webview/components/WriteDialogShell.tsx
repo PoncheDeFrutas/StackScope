@@ -9,11 +9,12 @@ interface WriteDialogShellProps {
 	error: string | null;
 	isSubmitting: boolean;
 	confirmDisabled: boolean;
+	confirmLabel?: string;
 	onCancel: () => void;
 	onConfirm: () => void;
 }
 
-export function WriteDialogShell({ title, ariaLabel, meta, children, preview, error, isSubmitting, confirmDisabled, onCancel, onConfirm }: WriteDialogShellProps): JSX.Element {
+export function WriteDialogShell({ title, ariaLabel, meta, children, preview, error, isSubmitting, confirmDisabled, confirmLabel = 'Confirm write', onCancel, onConfirm }: WriteDialogShellProps): JSX.Element {
 	return (
 		<div style={styles.backdrop} onMouseDown={() => !isSubmitting && onCancel()}>
 			<div style={styles.dialog} role="dialog" aria-modal="true" aria-label={ariaLabel} onMouseDown={(event) => event.stopPropagation()}>
@@ -24,7 +25,7 @@ export function WriteDialogShell({ title, ariaLabel, meta, children, preview, er
 				{error && <div style={styles.error}>{error}</div>}
 				<div style={styles.actions}>
 					<button type="button" onClick={onCancel} disabled={isSubmitting} style={styles.secondaryButton}>Cancel</button>
-					<button type="button" onClick={onConfirm} disabled={confirmDisabled || isSubmitting} style={styles.primaryButton}>{isSubmitting ? 'Writing…' : 'Confirm write'}</button>
+					<button type="button" onClick={onConfirm} disabled={confirmDisabled || isSubmitting} style={styles.primaryButton}>{isSubmitting ? 'Writing…' : confirmLabel}</button>
 				</div>
 			</div>
 		</div>
