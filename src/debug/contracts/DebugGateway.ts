@@ -24,6 +24,31 @@ export interface WriteMemoryResult {
 
 export interface SetExpressionResult { value: string; }
 
+export type DataBreakpointAccessType = 'read' | 'write' | 'readWrite';
+
+export interface DataBreakpointInfoResult {
+	dataId: string | null;
+	description: string;
+	accessTypes: DataBreakpointAccessType[];
+}
+
+export interface DataBreakpointRequest {
+	dataId: string;
+	accessType?: DataBreakpointAccessType;
+}
+
+export interface DataBreakpointResult {
+	id?: number;
+	verified: boolean;
+	message?: string;
+}
+
+export interface GdbWatchpointResult {
+	breakpointId: number | null;
+	verified: boolean;
+	message?: string;
+}
+
 /**
  * Result of evaluating a single register.
  */
@@ -110,6 +135,24 @@ export interface DebugGateway {
 	): Promise<WriteMemoryResult | null>;
 
 	setExpression(sessionId: string, expression: string, value: string, frameId?: number): Promise<SetExpressionResult | null>;
+
+	getDataBreakpointInfo?(
+		sessionId: string,
+		params: { name: string; frameId?: number; bytes?: number; asAddress?: boolean }
+	): Promise<DataBreakpointInfoResult | null>;
+
+	setDataBreakpoints?(
+		sessionId: string,
+		breakpoints: DataBreakpointRequest[]
+	): Promise<DataBreakpointResult[] | null>;
+
+	createGdbWatchpoint?(
+		sessionId: string,
+		expression: string,
+		accessType: DataBreakpointAccessType
+	): Promise<GdbWatchpointResult | null>;
+
+	removeGdbWatchpoint?(sessionId: string, breakpointId: number): Promise<GdbWatchpointResult | null>;
 
 	/**
 	 * Evaluates an expression and returns a memory reference if available.

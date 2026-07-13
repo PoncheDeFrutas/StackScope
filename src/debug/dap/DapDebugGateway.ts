@@ -6,6 +6,11 @@ import type {
 	ReadMemoryResult,
 	WriteMemoryResult,
 	SetExpressionResult,
+	DataBreakpointAccessType,
+	DataBreakpointInfoResult,
+	DataBreakpointRequest,
+	DataBreakpointResult,
+	GdbWatchpointResult,
 	RegisterEvalResult,
 	StackFrameResult,
 	StackThreadResult,
@@ -18,6 +23,7 @@ import {
 import { ConcurrencyLimiter, mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 import { reportHostError } from '../../host/services/HostErrorReporter.js';
 import type { DapCapabilitiesService } from './DapCapabilitiesService.js';
+import { createGdbWatchpoint, removeGdbWatchpoint } from './GdbWatchpointAdapter.js';
 
 const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
 
@@ -97,6 +103,77 @@ export class DapDebugGateway implements DebugGateway {
 			reportHostError('DapDebugGateway.setExpression', error);
 			return null;
 		}
+	}
+
+	async getDataBreakpointInfo(
+		sessionId: string,
+		params: { name: string; frameId?: number; bytes?: number; asAddress?: boolean }
+	): Promise<DataBreakpointInfoResult | null> {
+		const session = this.findSession(sessionId);
+		if (!session || !this.capabilities?.supportsDataBreakpoints(sessionId)) {
+			return null;
+		}
+		try {
+			const response = await session.customRequest('dataBreakpointInfo', params) as {
+				dataId?: unknown;
+				description?: unknown;
+				accessTypes?: unknown;
+			};
+			return {
+				dataId: typeof response?.dataId === 'string' ? response.dataId : null,
+				description: typeof response?.description === 'string' ? response.description : 'Data breakpoint',
+				accessTypes: Array.isArray(response?.accessTypes)
+					? response.accessTypes.filter(isDataBreakpointAccessType)
+					: [],
+			};
+		} catch (error) {
+			reportHostError('DapDebugGateway.getDataBreakpointInfo', error);
+			return null;
+		}
+	}
+
+	async setDataBreakpoints(sessionId: string, breakpoints: DataBreakpointRequest[]): Promise<DataBreakpointResult[] | null> {
+		const session = this.findSession(sessionId);
+		if (!session || !this.capabilities?.supportsDataBreakpoints(sessionId)) {
+			return null;
+		}
+		try {
+			const response = await session.customRequest('setDataBreakpoints', { breakpoints }) as { breakpoints?: unknown };
+			if (!Array.isArray(response?.breakpoints)) {
+				return null;
+			}
+			return response.breakpoints.map((breakpoint): DataBreakpointResult => {
+				const value = breakpoint as { id?: unknown; verified?: unknown; message?: unknown };
+				return {
+					id: typeof value.id === 'number' ? value.id : undefined,
+					verified: value.verified === true,
+					message: typeof value.message === 'string' ? value.message : undefined,
+				};
+			});
+		} catch (error) {
+			reportHostError('DapDebugGateway.setDataBreakpoints', error);
+			return null;
+		}
+	}
+
+	async createGdbWatchpoint(
+		sessionId: string,
+		expression: string,
+		accessType: DataBreakpointAccessType
+	): Promise<GdbWatchpointResult | null> {
+		const session = this.findSession(sessionId);
+		if (!session || !this.capabilities?.supportsGdbFallback(sessionId)) {
+			return null;
+		}
+		return createGdbWatchpoint(session, expression, accessType);
+	}
+
+	async removeGdbWatchpoint(sessionId: string, breakpointId: number): Promise<GdbWatchpointResult | null> {
+		const session = this.findSession(sessionId);
+		if (!session || !this.capabilities?.supportsGdbFallback(sessionId)) {
+			return null;
+		}
+		return removeGdbWatchpoint(session, breakpointId);
 	}
 
 	private async writeMemoryWithGdbEvaluate(session: vscode.DebugSession, memoryReference: string, offset: number, data: number[], allowPartial: boolean): Promise<WriteMemoryResult | null> {
@@ -438,4 +515,8 @@ function findActiveSession(sessionId: string): vscode.DebugSession | undefined {
 	return vscode.debug.activeDebugSession?.id === sessionId
 		? vscode.debug.activeDebugSession
 		: undefined;
+}
+
+function isDataBreakpointAccessType(value: unknown): value is DataBreakpointAccessType {
+	return value === 'read' || value === 'write' || value === 'readWrite';
 }

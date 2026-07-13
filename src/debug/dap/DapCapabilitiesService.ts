@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 
 type CapabilityState = 'unknown' | 'supported' | 'unsupported';
-type Operation = 'readMemory' | 'writeMemory' | 'disassemble' | 'evaluate' | 'setExpression';
+type Operation = 'readMemory' | 'writeMemory' | 'disassemble' | 'evaluate' | 'setExpression' | 'dataBreakpoints' | 'dataBreakpointBytes';
 type Snapshot = {
 	adapterType: string;
+	gdbFallback: boolean;
 	initialization: 'unknown' | 'received';
 	operations: Record<Operation, { state: CapabilityState; source?: string; reason?: string }>;
 };
@@ -13,20 +14,33 @@ export interface DebugWriteSupport {
 	register: boolean;
 }
 
+export interface DataBreakpointSupport {
+	dataBreakpoints: boolean;
+	memoryRanges: boolean;
+	gdbRegisterFallback: boolean;
+}
+
+export interface ObservedDataBreakpoint {
+	dataId: string;
+	accessType?: 'read' | 'write' | 'readWrite';
+}
+
 /** Tracks DAP initialize capabilities and definite unsupported responses. */
 export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory, vscode.Disposable {
 	private readonly snapshots = new Map<string, Snapshot>();
 	private readonly requests = new Map<string, Map<number, string>>();
 	private readonly changeEmitter = new vscode.EventEmitter<string>();
+	private readonly dataBreakpointEmitter = new vscode.EventEmitter<{ sessionId: string; breakpoints: ObservedDataBreakpoint[] }>();
 	private readonly disposable: vscode.Disposable;
 	readonly onDidChange = this.changeEmitter.event;
+	readonly onDidObserveDataBreakpoints = this.dataBreakpointEmitter.event;
 
 	constructor() {
 		this.disposable = vscode.debug.registerDebugAdapterTrackerFactory('*', this);
 	}
 
 	createDebugAdapterTracker(session: vscode.DebugSession): vscode.DebugAdapterTracker {
-		this.ensure(session.id, session.type);
+		this.ensure(session.id, session.type, session.configuration);
 		this.changeEmitter.fire(session.id);
 		return {
 			onWillReceiveMessage: (message: unknown) => this.noteRequest(session.id, message),
@@ -46,8 +60,20 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 		return this.get(sessionId).operations.setExpression.state === 'supported';
 	}
 
+	supportsDataBreakpoints(sessionId: string): boolean {
+		return this.get(sessionId).operations.dataBreakpoints.state === 'supported';
+	}
+
+	getDataBreakpointSupport(sessionId: string): DataBreakpointSupport {
+		return {
+			dataBreakpoints: this.supportsDataBreakpoints(sessionId),
+			memoryRanges: this.get(sessionId).operations.dataBreakpointBytes.state === 'supported',
+			gdbRegisterFallback: this.supportsGdbFallback(sessionId),
+		};
+	}
+
 	supportsGdbFallback(sessionId: string): boolean {
-		return ['cppdbg', 'cortex-debug'].includes(this.get(sessionId).adapterType);
+		return this.get(sessionId).gdbFallback;
 	}
 
 	getWriteSupport(sessionId: string): DebugWriteSupport {
@@ -65,14 +91,15 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 	dispose(): void {
 		this.disposable.dispose();
 		this.changeEmitter.dispose();
+		this.dataBreakpointEmitter.dispose();
 		this.snapshots.clear();
 		this.requests.clear();
 	}
 
-	private ensure(sessionId: string, adapterType: string): Snapshot {
+	private ensure(sessionId: string, adapterType: string, configuration?: vscode.DebugConfiguration): Snapshot {
 		let snapshot = this.snapshots.get(sessionId);
 		if (!snapshot) {
-			snapshot = emptySnapshot(adapterType);
+			snapshot = emptySnapshot(adapterType, configuration);
 			this.snapshots.set(sessionId, snapshot);
 		}
 		return snapshot;
@@ -85,6 +112,12 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 		let requests = this.requests.get(sessionId);
 		if (!requests) { requests = new Map(); this.requests.set(sessionId, requests); }
 		requests.set(message.seq, message.command);
+		if (message.command === 'setDataBreakpoints') {
+			const breakpoints = getObservedDataBreakpoints(message);
+			if (breakpoints) {
+				this.dataBreakpointEmitter.fire({ sessionId, breakpoints });
+			}
+		}
 	}
 
 	private noteResponse(sessionId: string, message: unknown): void {
@@ -118,7 +151,7 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 
 	private applyCapabilities(snapshot: Snapshot, capabilities: Record<string, unknown>, source: string): boolean {
 		let changed = false;
-		const map: Array<[Operation, string]> = [['readMemory', 'supportsReadMemoryRequest'], ['writeMemory', 'supportsWriteMemoryRequest'], ['disassemble', 'supportsDisassembleRequest'], ['setExpression', 'supportsSetExpression']];
+		const map: Array<[Operation, string]> = [['readMemory', 'supportsReadMemoryRequest'], ['writeMemory', 'supportsWriteMemoryRequest'], ['disassemble', 'supportsDisassembleRequest'], ['setExpression', 'supportsSetExpression'], ['dataBreakpoints', 'supportsDataBreakpoints'], ['dataBreakpointBytes', 'supportsDataBreakpointBytes']];
 		for (const [operation, field] of map) {
 			if (typeof capabilities[field] === 'boolean') {
 				const nextState: CapabilityState = capabilities[field] ? 'supported' : 'unsupported';
@@ -132,11 +165,32 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 	}
 }
 
-function emptySnapshot(adapterType: string): Snapshot {
+function emptySnapshot(adapterType: string, configuration?: vscode.DebugConfiguration): Snapshot {
 	const unknown = (): { state: CapabilityState } => ({ state: 'unknown' });
-	return { adapterType, initialization: 'unknown', operations: { readMemory: unknown(), writeMemory: unknown(), disassemble: unknown(), evaluate: unknown(), setExpression: unknown() } };
+	return { adapterType, gdbFallback: isGdbFallback(adapterType, configuration), initialization: 'unknown', operations: { readMemory: unknown(), writeMemory: unknown(), disassemble: unknown(), evaluate: unknown(), setExpression: unknown(), dataBreakpoints: unknown(), dataBreakpointBytes: unknown() } };
 }
-function isRequest(value: unknown): value is { type: 'request'; seq: number; command: string } { return typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'request' && Number.isInteger((value as { seq?: unknown }).seq) && typeof (value as { command?: unknown }).command === 'string'; }
+
+function isGdbFallback(adapterType: string, configuration?: vscode.DebugConfiguration): boolean {
+	if (adapterType === 'cortex-debug') {return true;}
+	if (adapterType !== 'cppdbg') {return false;}
+	const miMode = configuration?.MIMode;
+	if (typeof miMode === 'string') {return miMode.toLowerCase() === 'gdb';}
+	const debuggerPath = configuration?.miDebuggerPath;
+	return typeof debuggerPath === 'string' && /(?:^|[/\\])gdb(?:-|$)/i.test(debuggerPath);
+}
+function isRequest(value: unknown): value is { type: 'request'; seq: number; command: string; arguments?: unknown } { return typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'request' && Number.isInteger((value as { seq?: unknown }).seq) && typeof (value as { command?: unknown }).command === 'string'; }
 function isResponse(value: unknown): value is { type: 'response'; request_seq: number; success: boolean; body?: { capabilities?: Record<string, unknown> } & Record<string, unknown>; message?: unknown } { return typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'response' && Number.isInteger((value as { request_seq?: unknown }).request_seq) && typeof (value as { success?: unknown }).success === 'boolean'; }
 function isCapabilitiesEvent(value: unknown): value is { type: 'event'; event: 'capabilities'; body: { capabilities: Record<string, unknown> } } { return typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'event' && (value as { event?: unknown }).event === 'capabilities' && typeof (value as { body?: unknown }).body === 'object' && (value as { body: { capabilities?: unknown } }).body.capabilities !== null; }
-function commandToOperation(command: string): Operation | null { return command === 'readMemory' ? 'readMemory' : command === 'writeMemory' ? 'writeMemory' : command === 'disassemble' ? 'disassemble' : command === 'evaluate' ? 'evaluate' : command === 'setExpression' ? 'setExpression' : null; }
+function commandToOperation(command: string): Operation | null { return command === 'readMemory' ? 'readMemory' : command === 'writeMemory' ? 'writeMemory' : command === 'disassemble' ? 'disassemble' : command === 'evaluate' ? 'evaluate' : command === 'setExpression' ? 'setExpression' : command === 'dataBreakpointInfo' || command === 'setDataBreakpoints' ? 'dataBreakpoints' : null; }
+
+function getObservedDataBreakpoints(message: { arguments?: unknown }): ObservedDataBreakpoint[] | null {
+	const values = (message.arguments as { breakpoints?: unknown } | undefined)?.breakpoints;
+	if (!Array.isArray(values)) {return null;}
+	const result: ObservedDataBreakpoint[] = [];
+	for (const value of values) {
+		if (!value || typeof value !== 'object' || typeof (value as { dataId?: unknown }).dataId !== 'string') {continue;}
+		const accessType = (value as { accessType?: unknown }).accessType;
+		result.push({ dataId: (value as { dataId: string }).dataId, accessType: accessType === 'read' || accessType === 'write' || accessType === 'readWrite' ? accessType : undefined });
+	}
+	return result;
+}

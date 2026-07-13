@@ -148,6 +148,56 @@ suite('DapDebugGateway', () => {
 		]);
 		assert.deepStrictEqual(contexts, ['repl', 'repl']);
 	});
+
+	test('gets data breakpoint info and applies data breakpoints', async () => {
+		const session = createSession(async (command, args) => {
+			if (command === 'dataBreakpointInfo') {
+				assert.deepStrictEqual(args, { name: '$pc', frameId: 7 });
+				return { dataId: 'pc-id', description: 'Program counter', accessTypes: ['read', 'write'] };
+			}
+			assert.strictEqual(command, 'setDataBreakpoints');
+			assert.deepStrictEqual(args, { breakpoints: [{ dataId: 'pc-id', accessType: 'write' }] });
+			return { breakpoints: [{ id: 4, verified: true }] };
+		});
+		const capabilities = {
+			supportsDataBreakpoints: () => true,
+		} as never;
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, capabilities);
+		assert.deepStrictEqual(await gateway.getDataBreakpointInfo('session-1', { name: '$pc', frameId: 7 }), {
+			dataId: 'pc-id', description: 'Program counter', accessTypes: ['read', 'write'],
+		});
+		assert.deepStrictEqual(await gateway.setDataBreakpoints('session-1', [{ dataId: 'pc-id', accessType: 'write' }]), [{ id: 4, verified: true, message: undefined }]);
+	});
+
+	test('creates and removes GDB register watchpoints without DAP support', async () => {
+		const requests: Array<{ expression: string; context: unknown }> = [];
+		const session = createSession(async (command, args) => {
+			assert.strictEqual(command, 'evaluate');
+			requests.push({ expression: String(args.expression), context: args.context });
+			return { result: args.expression === '-exec awatch $rax' ? 'Hardware access watchpoint 7: $rax' : '' };
+		});
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+
+		assert.deepStrictEqual(await gateway.createGdbWatchpoint('session-1', 'rax', 'readWrite'), {
+			breakpointId: 7, verified: true, message: 'Hardware access watchpoint 7: $rax',
+		});
+		assert.deepStrictEqual(await gateway.removeGdbWatchpoint('session-1', 7), { breakpointId: 7, verified: true });
+		assert.deepStrictEqual(requests, [
+			{ expression: '-exec awatch $rax', context: 'repl' },
+			{ expression: '-exec delete 7', context: 'repl' },
+		]);
+	});
+
+	test('rejects unsafe GDB fallback expressions before sending a command', async () => {
+		const session = createSession(async () => {
+			throw new Error('must not be called');
+		});
+		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+
+		assert.deepStrictEqual(await gateway.createGdbWatchpoint('session-1', '$rax; continue', 'write'), {
+			breakpointId: null, verified: false, message: 'GDB fallback only accepts a single register expression.',
+		});
+	});
 });
 
 function gdbFallbackCapabilities() {
