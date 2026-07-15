@@ -67,22 +67,6 @@ export const VALID_NUMBER_FORMATS: readonly NumberFormat[] = ['hex', 'dec', 'oct
 export const VALID_DECODED_MODES: readonly DecodedMode[] = ['ascii', 'uint8', 'int8', 'bin', 'hidden'];
 
 /**
- * Creates a new MemoryViewConfig with defaults for missing values.
- */
-export function createMemoryViewConfig(
-	partial: Partial<MemoryViewConfig> = {}
-): MemoryViewConfig {
-	return Object.freeze({
-		columns: partial.columns ?? DEFAULT_CONFIG.columns,
-		unitSize: partial.unitSize ?? DEFAULT_CONFIG.unitSize,
-		endianness: partial.endianness ?? DEFAULT_CONFIG.endianness,
-		totalSize: partial.totalSize ?? DEFAULT_CONFIG.totalSize,
-		numberFormat: partial.numberFormat ?? DEFAULT_CONFIG.numberFormat,
-		decodedMode: partial.decodedMode ?? DEFAULT_CONFIG.decodedMode,
-	});
-}
-
-/**
  * Validates a config and returns errors if any.
  */
 export function validateConfig(config: MemoryViewConfig): string[] {
@@ -109,13 +93,6 @@ export function validateConfig(config: MemoryViewConfig): string[] {
 	}
 
 	return errors;
-}
-
-/**
- * Calculates bytes per row based on config.
- */
-export function bytesPerRow(config: MemoryViewConfig): number {
-	return config.columns * config.unitSize;
 }
 
 /**

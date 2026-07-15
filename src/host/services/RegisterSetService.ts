@@ -33,13 +33,6 @@ export class RegisterSetService {
 	}
 
 	/**
-	 * Gets only user-defined register sets.
-	 */
-	getUserSets(): RegisterSet[] {
-		return [...this.userSets];
-	}
-
-	/**
 	 * Gets a register set by ID.
 	 */
 	get(id: string): RegisterSet | undefined {

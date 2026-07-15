@@ -12,7 +12,7 @@ suite('PresetService', () => {
 		const second = service.save(' argument register ', '$X0');
 
 		assert.strictEqual(second.id, first.id);
-		assert.deepStrictEqual(service.getUserPresets().map((preset) => preset.id), [first.id]);
+		assert.deepStrictEqual(service.getAll().map((preset) => preset.id), [first.id]);
 	});
 
 	test('does not expose quick register presets in saved list', () => {
@@ -42,7 +42,7 @@ suite('PresetService', () => {
 
 		const service = new PresetService(createMockContext(stored));
 
-		assert.deepStrictEqual(service.getUserPresets().map((preset) => preset.id), ['preset-1']);
+		assert.deepStrictEqual(service.getAll().map((preset) => preset.id), ['preset-1']);
 	});
 
 	test('load filters saved quick register targets', () => {
@@ -63,7 +63,7 @@ suite('PresetService', () => {
 
 		const service = new PresetService(createMockContext(stored));
 
-		assert.deepStrictEqual(service.getUserPresets().map((preset) => preset.id), ['preset-stack']);
+		assert.deepStrictEqual(service.getAll().map((preset) => preset.id), ['preset-stack']);
 	});
 });
 

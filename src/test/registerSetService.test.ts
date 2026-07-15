@@ -23,7 +23,7 @@ suite('RegisterSetService', () => {
 			createMockContext(stored, 'saved-registers')
 		);
 
-		assert.deepStrictEqual(service.getUserSets().map((set) => set.id), ['saved-registers']);
+		assert.deepStrictEqual(service.getAll().map((set) => set.id), ['builtin-core', 'saved-registers']);
 		assert.strictEqual(service.getSelectedId(), 'saved-registers');
 	});
 

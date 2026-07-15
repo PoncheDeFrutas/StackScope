@@ -23,21 +23,7 @@ export class PresetService {
 
 	/** Gets all user presets. */
 	getAll(): MemoryPreset[] {
-		return this.getUserPresets();
-	}
-
-	/**
-	 * Gets only user-defined presets.
-	 */
-	getUserPresets(): MemoryPreset[] {
 		return [...this.userPresets];
-	}
-
-	/**
-	 * Gets a preset by ID.
-	 */
-	get(id: string): MemoryPreset | undefined {
-		return this.userPresets.find((p) => p.id === id);
 	}
 
 	/**
@@ -71,34 +57,6 @@ export class PresetService {
 		this.userPresets.splice(index, 1);
 		this.saveToStorage();
 		return true;
-	}
-
-	/**
-	 * Updates a user preset.
-	 */
-	update(id: string, updates: Partial<Pick<MemoryPreset, 'name' | 'target' | 'description'>>): MemoryPreset | null {
-		const index = this.userPresets.findIndex((p) => p.id === id);
-		if (index === -1) {
-			return null;
-		}
-
-		const existing = this.userPresets[index];
-		const updated = createMemoryPreset(
-			existing.id,
-			updates.name ?? existing.name,
-			updates.target ?? existing.target,
-			updates.description ?? existing.description
-		);
-
-		// Preserve original createdAt
-		const finalPreset: MemoryPreset = {
-			...updated,
-			createdAt: existing.createdAt,
-		};
-
-		this.userPresets[index] = finalPreset;
-		this.saveToStorage();
-		return finalPreset;
 	}
 
 	private loadFromStorage(): void {
