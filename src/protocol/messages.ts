@@ -48,14 +48,6 @@ export interface ProtocolEvent<E extends string, P> {
 	payload: P;
 }
 
-/**
- * Union of all message types.
- */
-export type ProtocolMessage =
-	| ProtocolRequest<string, unknown>
-	| ProtocolResponse<unknown>
-	| ProtocolEvent<string, unknown>;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }

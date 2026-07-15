@@ -14,33 +14,13 @@ import { DebugMutationService } from '../services/DebugMutationService.js';
 import { DataWatchpointService } from '../services/DataWatchpointService.js';
 
 /**
- * Container for all host-level services.
- */
-export interface HostServices {
-	sessionTracker: VscodeSessionTracker;
-	debugGateway: DapDebugGateway;
-	capabilities: DapCapabilitiesService;
-	debugMutations: DebugMutationService;
-	dataWatchpoints: DataWatchpointService;
-	documentRegistry: DocumentRegistry;
-	presetService: PresetService;
-	registerSetService: RegisterSetService;
-	stackSelectionService: StackSelectionService;
-	viewStateService: ViewStateService;
-	editorTabService: EditorTabService;
-	messageRouter: HostMessageRouter;
-	memoryViewProvider: StackScopeWebviewViewProvider;
-	registerViewProvider: StackScopeWebviewViewProvider;
-}
-
-/**
  * Creates and wires all host services.
  * This is the composition root — no business logic here.
  */
 export function createHostServices(
 	extensionUri: vscode.Uri,
 	context: vscode.ExtensionContext
-): HostServices {
+) {
 	const sessionTracker = new VscodeSessionTracker();
 	const capabilities = new DapCapabilitiesService();
 	const debugMutations = new DebugMutationService();

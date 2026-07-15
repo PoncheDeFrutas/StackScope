@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import type { UnitSize, Endianness } from '../../domain/config/MemoryViewConfig.js';
+import type { UnitSize, Endianness, NumberFormat, DecodedMode } from '../../domain/config/MemoryViewConfig.js';
 import { calculateVisibleRange } from '../hooks/usePagedMemory.js';
 import {
 	CHANGE_HIGHLIGHT_FADE_MS,
@@ -11,12 +11,6 @@ import { formatMemoryAddress, parseMemoryAddress } from '../memoryAddress.js';
 
 /** Represents a byte value or null for unreadable memory */
 export type MemoryByte = number | null;
-
-/** Number format for display */
-export type NumberFormat = 'hex' | 'dec' | 'oct' | 'bin';
-
-/** Decoded bytes display mode */
-export type DecodedMode = 'ascii' | 'uint8' | 'int8' | 'bin' | 'hidden';
 
 export interface MemorySelection {
 	anchorOffset: number;
@@ -97,15 +91,6 @@ function getDecWidth(unitSize: UnitSize): number {
 }
 
 /**
- * Decoded cell width MUST match hex cell width for 1:1 alignment.
- * For standard hex mode with 1-byte units, both hex and decoded use 2ch cells.
- */
-function getDecodedCellWidth(hexCellWidth: number, _mode: DecodedMode): number {
-	// Always match hex cell width for perfect 1:1 alignment
-	return hexCellWidth;
-}
-
-/**
  * Virtualized memory grid with lazy loading support.
  * Only renders visible rows for performance with large memory regions.
  */
@@ -139,7 +124,7 @@ export function VirtualMemoryGrid({
 
 	// Cell width calculation - same for both hex and decoded
 	const cellWidthCh = getHexCellWidth(unitSize, numberFormat);
-	const decodedCellWidthCh = getDecodedCellWidth(cellWidthCh, decodedMode);
+	const decodedCellWidthCh = cellWidthCh;
 
 	const totalRows = Math.ceil(visibleTotalSize / bytesPerRow);
 	const totalHeight = totalRows * ROW_HEIGHT;

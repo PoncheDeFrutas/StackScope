@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { createHostServices, type HostServices } from './composition/createHostServices.js';
+import { createHostServices } from './composition/createHostServices.js';
 import {
 	createOpenMemoryViewCommand,
 	createFocusMemoryViewCommand,
@@ -11,7 +11,7 @@ import {
 import { MEMORY_VIEW_TYPE, REGISTER_VIEW_TYPE } from './providers/StackScopeWebviewViewProvider.js';
 import { disposeHostErrorReporter } from './services/HostErrorReporter.js';
 
-let services: HostServices | null = null;
+let services: ReturnType<typeof createHostServices> | null = null;
 
 /**
  * Activates the StackScope extension.

@@ -77,17 +77,3 @@ export const BUILTIN_REGISTER_SETS: readonly RegisterSet[] = Object.freeze([
 export function isBuiltinRegisterSet(set: RegisterSet): boolean {
 	return set.id.startsWith('builtin-');
 }
-
-/**
- * Value of a register after evaluation.
- */
-export interface RegisterValue {
-	/** Register expression that was evaluated */
-	readonly expression: string;
-	/** Display label */
-	readonly label: string;
-	/** Resolved value as hex string, or null if unavailable */
-	readonly value: string | null;
-	/** Error message if evaluation failed */
-	readonly error?: string;
-}
