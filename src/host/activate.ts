@@ -1,17 +1,7 @@
 import * as vscode from 'vscode';
 import { createHostServices } from './composition/createHostServices.js';
-import {
-	createOpenMemoryViewCommand,
-	createFocusMemoryViewCommand,
-	createOpenMemoryViewInEditorCommand,
-	createOpenCallStackInEditorCommand,
-	createOpenDisassemblyInEditorCommand,
-	createFocusRegistersViewCommand,
-} from './commands/openMemoryViewCommand.js';
 import { MEMORY_VIEW_TYPE, REGISTER_VIEW_TYPE } from './providers/StackScopeWebviewViewProvider.js';
 import { disposeHostErrorReporter } from './services/HostErrorReporter.js';
-
-let services: ReturnType<typeof createHostServices> | null = null;
 
 /**
  * Activates the StackScope extension.
@@ -19,13 +9,13 @@ let services: ReturnType<typeof createHostServices> | null = null;
 export function activate(context: vscode.ExtensionContext): void {
 	console.log('StackScope: Activating...');
 
-	services = createHostServices(context.extensionUri, context);
+	const activeServices = createHostServices(context.extensionUri, context);
 
 	// Register webview view provider for panel
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			MEMORY_VIEW_TYPE,
-			services.memoryViewProvider,
+			activeServices.memoryViewProvider,
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -37,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			REGISTER_VIEW_TYPE,
-			services.registerViewProvider,
+			activeServices.registerViewProvider,
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -48,32 +38,32 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	// Register commands
 	context.subscriptions.push(
-		createOpenMemoryViewCommand(services.memoryViewProvider),
-		createFocusMemoryViewCommand(services.memoryViewProvider),
-		createFocusRegistersViewCommand(services.registerViewProvider),
-		createOpenMemoryViewInEditorCommand(services.editorTabService),
-		createOpenCallStackInEditorCommand(services.editorTabService),
-		createOpenDisassemblyInEditorCommand(services.editorTabService)
+		vscode.commands.registerCommand('stackscope.openMemoryView', () => activeServices.memoryViewProvider.focus()),
+		vscode.commands.registerCommand('stackscope.focusMemoryView', () => activeServices.memoryViewProvider.focus()),
+		vscode.commands.registerCommand('stackscope.focusRegistersView', () => activeServices.registerViewProvider.focus()),
+		vscode.commands.registerCommand('stackscope.openMemoryViewInEditor', () => activeServices.editorTabService.openMemory()),
+		vscode.commands.registerCommand('stackscope.openCallStackInEditor', () => activeServices.editorTabService.openDebugNavigation('call-stack')),
+		vscode.commands.registerCommand('stackscope.openDisassemblyInEditor', () => activeServices.editorTabService.openDebugNavigation('disassembly'))
 	);
 
 	// Register session tracker for cleanup
 	context.subscriptions.push({
-		dispose: () => services?.sessionTracker.dispose(),
+		dispose: () => activeServices.sessionTracker.dispose(),
 	});
 
 	// Register provider for cleanup
 	context.subscriptions.push({
-		dispose: () => services?.memoryViewProvider.dispose(),
+		dispose: () => activeServices.memoryViewProvider.dispose(),
 	});
 	context.subscriptions.push({
-		dispose: () => services?.registerViewProvider.dispose(),
+		dispose: () => activeServices.registerViewProvider.dispose(),
 	});
 
 	context.subscriptions.push({
-		dispose: () => services?.editorTabService.dispose(),
+		dispose: () => activeServices.editorTabService.dispose(),
 	});
 	context.subscriptions.push({ dispose: disposeHostErrorReporter });
-	context.subscriptions.push(services.capabilities);
+	context.subscriptions.push(activeServices.capabilities);
 
 	console.log('StackScope: Activated');
 }
@@ -83,5 +73,4 @@ export function activate(context: vscode.ExtensionContext): void {
  */
 export function deactivate(): void {
 	console.log('StackScope: Deactivating...');
-	services = null;
 }

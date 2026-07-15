@@ -67,6 +67,21 @@ suite('DapDebugGateway', () => {
 		]);
 	});
 
+	test('resolves literal memory references locally and registers through DAP', async () => {
+		const requests: Array<{ expression: unknown; context: unknown; frameId: unknown }> = [];
+		const session = createSession(async (command, args) => {
+			assert.strictEqual(command, 'evaluate');
+			requests.push({ expression: args.expression, context: args.context, frameId: args.frameId });
+			return { memoryReference: '0x2000' };
+		});
+		const gateway = new DapDebugGateway(undefined, () => session);
+
+		assert.strictEqual(await gateway.evaluateForMemoryReference('session-1', '42'), '0x2a');
+		assert.strictEqual(requests.length, 0);
+		assert.strictEqual(await gateway.evaluateForMemoryReference('session-1', 'pc', 7), '0x2000');
+		assert.deepStrictEqual(requests, [{ expression: '$pc', context: 'watch', frameId: 7 }]);
+	});
+
 	test('limits concurrent memory reads across calls', async () => {
 		let active = 0;
 		let peak = 0;

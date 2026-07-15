@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DocumentSnapshot, SessionSnapshot } from '../../protocol/methods.js';
 import type { ByteChangeMap } from '../changeTracking.js';
 import type { UsePagedMemoryResult } from './usePagedMemory.js';
-import { HostClient } from '../rpc/HostClient.js';
+import { messageBus } from '../rpc/WebviewMessageBus.js';
 
 interface MemoryEdit {
 	offset: number;
@@ -59,7 +59,7 @@ export function useMemoryEditing({ document, session, pagedMemory, setChangedByt
 		setIsMutating(true);
 		setEditError(null);
 		try {
-			const result = await HostClient.writeMemory(document.id, edit.offset, data);
+			const result = await messageBus.request('writeMemory', { documentId: document.id, offset: edit.offset, data });
 			pagedMemory.applyVerifiedBytes(result.offset, result.verification.data);
 			if (!result.verified) {
 				setEditError('Write verification failed. Memory was re-read but does not match the requested value.');
@@ -95,7 +95,7 @@ export function useMemoryEditing({ document, session, pagedMemory, setChangedByt
 		}
 		setIsMutating(true);
 		try {
-			const result = await HostClient.writeMemory(entry.documentId, entry.offset, entry.data);
+			const result = await messageBus.request('writeMemory', { documentId: entry.documentId, offset: entry.offset, data: entry.data });
 			pagedMemory.applyVerifiedBytes(result.offset, result.verification.data);
 			if (!result.verified) {
 				setActionError('Undo could not be verified.');

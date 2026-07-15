@@ -48,7 +48,9 @@ export class WebviewMessageBus {
 	async request<M extends MethodName>(
 		method: M,
 		params: MethodMap[M]['params'],
-		timeoutMs?: number
+		timeoutMs = method === 'readMemory' || method === 'writeMemory' || method === 'writeRegister'
+			? 15_000
+			: undefined
 	): Promise<MethodMap[M]['result']> {
 		if (this.disposed) {
 			throw new ProtocolRequestError(

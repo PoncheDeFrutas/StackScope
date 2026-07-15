@@ -15,7 +15,6 @@ import type {
 	StackFrameResult,
 	StackThreadResult,
 } from '../contracts/DebugGateway.js';
-import { DapAddressResolver } from './DapAddressResolver.js';
 import {
 	getDapErrorMessage,
 	normalizeReadMemoryResponse,
@@ -32,7 +31,6 @@ const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
  * Handles readMemory and evaluate requests via VS Code debug API.
  */
 export class DapDebugGateway implements DebugGateway {
-	private readonly resolver = new DapAddressResolver();
 	private readonly memoryReadLimiter = new ConcurrencyLimiter(DEFAULT_MAX_CONCURRENT_DAP_REQUESTS);
 
 	constructor(
@@ -228,7 +226,7 @@ export class DapDebugGateway implements DebugGateway {
 			return null;
 		}
 
-		return this.resolver.resolve(session, expression, frameId);
+		return this.resolveMemoryReference(session, expression, frameId);
 	}
 
 	async readRegisters(
@@ -418,6 +416,60 @@ export class DapDebugGateway implements DebugGateway {
 			}
 		}
 
+		return null;
+	}
+
+	private async resolveMemoryReference(
+		session: vscode.DebugSession,
+		expression: string,
+		frameId?: number
+	): Promise<string | null> {
+		const trimmed = expression.trim();
+		if (/^0x[0-9a-fA-F]+$/i.test(trimmed)) {
+			return trimmed;
+		}
+		if (/^\d+$/.test(trimmed)) {
+			return `0x${BigInt(trimmed).toString(16)}`;
+		}
+
+		const effectiveFrameId = frameId ?? (await this.getTopFrameId(session));
+		if (this.isRegisterExpression(trimmed)) {
+			const result = await this.evaluateMemoryReference(session, trimmed, effectiveFrameId);
+			if (result) {
+				return result;
+			}
+		}
+		if (this.isBareRegisterExpression(trimmed)) {
+			const result = await this.evaluateMemoryReference(session, `$${trimmed}`, effectiveFrameId);
+			if (result) {
+				return result;
+			}
+		}
+
+		return (await this.evaluateMemoryReference(session, trimmed, effectiveFrameId))
+			?? (await this.evaluateMemoryReference(session, `&(${trimmed})`, effectiveFrameId))
+			?? (await this.evaluateMemoryReference(session, `(void*)&(${trimmed})`, effectiveFrameId));
+	}
+
+	private async evaluateMemoryReference(
+		session: vscode.DebugSession,
+		expression: string,
+		frameId?: number
+	): Promise<string | null> {
+		for (const context of ['watch', 'hover'] as const) {
+			try {
+				const response = await session.customRequest('evaluate', { expression, context, frameId });
+				if (typeof response?.memoryReference === 'string') {
+					return response.memoryReference;
+				}
+				const match = typeof response?.result === 'string' ? response.result.match(/0x[0-9a-fA-F]+/i) : null;
+				if (match) {
+					return match[0];
+				}
+			} catch {
+				// Try the next context.
+			}
+		}
 		return null;
 	}
 

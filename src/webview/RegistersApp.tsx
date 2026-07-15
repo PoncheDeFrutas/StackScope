@@ -18,7 +18,6 @@ import { ExplorerSection } from './components/ExplorerSection.js';
 import { useWatchpointDialog } from './hooks/useWatchpointDialog.js';
 import type { Endianness } from '../domain/config/MemoryViewConfig.js';
 import { LoadGeneration } from './hooks/LoadGeneration.js';
-import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 
 const INITIAL_SESSION: SessionSnapshot = { sessionId: null, status: 'none' };
@@ -69,7 +68,7 @@ export function RegistersApp(): JSX.Element {
 		const generation = loadGenerationRef.current.advance();
 		setIsLoading(true);
 		try {
-			const result = await HostClient.readRegisters(setId);
+			const result = await messageBus.request('readRegisters', { setId });
 			if (!mountedRef.current || !loadGenerationRef.current.isCurrent(generation)) {
 				return;
 			}
@@ -91,7 +90,7 @@ export function RegistersApp(): JSX.Element {
 	const initialize = useCallback(async (): Promise<void> => {
 		const generation = initializeGenerationRef.current.advance();
 		try {
-			const result = await HostClient.init();
+			const result = await messageBus.request('init', {});
 			if (!mountedRef.current || !initializeGenerationRef.current.isCurrent(generation)) {
 				return;
 			}
@@ -165,7 +164,7 @@ export function RegistersApp(): JSX.Element {
 			selectedSetIdRef.current = setId;
 			setSelectedSetId(setId);
 			try {
-				await HostClient.selectRegisterSet(setId);
+				await messageBus.request('selectRegisterSet', { id: setId });
 				if (sessionRef.current.status === 'stopped') {
 					await loadRegisters(setId);
 				} else {
@@ -189,7 +188,7 @@ export function RegistersApp(): JSX.Element {
 
 	const handleValueFormatChange = useCallback((format: RegisterValueFormat) => {
 		setValueFormat(format);
-		void HostClient.saveRegisterViewState(format).catch((error) => {
+		void messageBus.request('saveRegisterViewState', { registerValueFormat: format }).catch((error) => {
 			console.error('Failed to save register view state:', error);
 		});
 	}, []);
@@ -201,7 +200,7 @@ export function RegistersApp(): JSX.Element {
 	}, [isWritingRegister]);
 
 	const saveSections = useCallback((nextRegisters: boolean, nextWatchpoints: boolean) => {
-		void HostClient.saveRegisterViewState(valueFormat, { registersExpanded: nextRegisters, watchpointsExpanded: nextWatchpoints });
+		void messageBus.request('saveRegisterViewState', { registerValueFormat: valueFormat, registersExpanded: nextRegisters, watchpointsExpanded: nextWatchpoints });
 	}, [valueFormat]);
 
 	const handleRegistersExpandedChange = useCallback((expanded: boolean) => {
@@ -238,7 +237,7 @@ export function RegistersApp(): JSX.Element {
 	}, [handleWatchpointsExpandedChange, watchpointDialog]);
 
 	const handleRemoveWatchpoint = useCallback((id: string) => {
-		void HostClient.removeWatchpoint(id).catch((error) => watchpointDialog.setError(error instanceof Error ? error.message : 'Failed to remove watchpoint'));
+		void messageBus.request('removeWatchpoint', { id }).catch((error) => watchpointDialog.setError(error instanceof Error ? error.message : 'Failed to remove watchpoint'));
 	}, [watchpointDialog]);
 
 	const handleConfirmRegisterEdit = useCallback(async (value: string) => {
@@ -246,7 +245,7 @@ export function RegistersApp(): JSX.Element {
 		setIsWritingRegister(true);
 		setRegisterEditError(null);
 		try {
-			const result = await HostClient.writeRegister(editingRegister.expression, value);
+			const result = await messageBus.request('writeRegister', { expression: editingRegister.expression, value });
 			if (!result.readBackAvailable) {
 				setRegisterEditError('The debugger accepted the write but could not read the register back.');
 				return;
@@ -264,7 +263,7 @@ export function RegistersApp(): JSX.Element {
 	const handleDeleteSet = useCallback(
 		async (setId: string) => {
 			try {
-				await HostClient.deleteRegisterSet(setId);
+				await messageBus.request('deleteRegisterSet', { id: setId });
 				const remaining = registerSets.filter((set) => set.id !== setId);
 				setRegisterSets(remaining);
 				if (selectedSetId === setId && remaining[0]) {
@@ -281,11 +280,11 @@ export function RegistersApp(): JSX.Element {
 		async (name: string, registers: RegisterItemSnapshot[], description?: string) => {
 			try {
 				if (editingSet === 'new') {
-					const result = await HostClient.saveRegisterSet(name, registers, description);
+					const result = await messageBus.request('saveRegisterSet', { name, registers, description });
 					setRegisterSets((previous) => [...previous, result.registerSet]);
 					await handleSelectSet(result.registerSet.id);
 				} else if (editingSet) {
-					const result = await HostClient.updateRegisterSet(editingSet.id, {
+					const result = await messageBus.request('updateRegisterSet', { id: editingSet.id,
 						name,
 						registers,
 						description,

@@ -5,7 +5,7 @@ import type {
 	WatchpointSnapshot,
 	WatchpointTarget,
 } from '../../protocol/methods.js';
-import { HostClient } from '../rpc/HostClient.js';
+import { messageBus } from '../rpc/WebviewMessageBus.js';
 
 interface WatchpointDialogState {
 	target: WatchpointTarget;
@@ -24,7 +24,7 @@ export function useWatchpointDialog(onCreated?: (watchpoint: WatchpointSnapshot)
 	const prepare = useCallback(async (target: WatchpointTarget): Promise<boolean> => {
 		setError(null);
 		try {
-			const candidate = await HostClient.getWatchpointCandidate(target);
+			const candidate = await messageBus.request('getWatchpointCandidate', { target });
 			if (!candidate.candidateId || !candidate.backend) {
 				setError(candidate.description);
 				return false;
@@ -42,7 +42,7 @@ export function useWatchpointDialog(onCreated?: (watchpoint: WatchpointSnapshot)
 		setIsSubmitting(true);
 		setError(null);
 		try {
-			const result = await HostClient.createWatchpoint(dialog.candidateId, accessType);
+			const result = await messageBus.request('createWatchpoint', { candidateId: dialog.candidateId, accessType });
 			onCreated?.(result.watchpoint);
 			setDialog(null);
 		} catch (caught) {

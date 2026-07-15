@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { MemoryViewConfig } from '../../domain/config/MemoryViewConfig.js';
-import { HostClient } from '../rpc/HostClient.js';
+import { messageBus } from '../rpc/WebviewMessageBus.js';
 
 const SAVE_DEBOUNCE_MS = 200;
 
@@ -16,7 +16,7 @@ export function useMemoryViewStatePersistence(
 		}
 
 		const timeoutId = window.setTimeout(() => {
-			void HostClient.saveViewState({ currentTarget, config, showSettings }).catch((error) => {
+			void messageBus.request('saveViewState', { viewState: { currentTarget, config, showSettings } }).catch((error) => {
 				console.error('Failed to save memory view state:', error);
 			});
 		}, SAVE_DEBOUNCE_MS);

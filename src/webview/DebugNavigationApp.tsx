@@ -6,7 +6,6 @@ import type {
 	StackSelectionSnapshot,
 	StackThreadSnapshot,
 } from '../protocol/methods.js';
-import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 
 declare global {
@@ -152,7 +151,7 @@ export function DebugNavigationApp(): JSX.Element {
 
 	async function init(): Promise<void> {
 		try {
-			const result = await HostClient.init();
+			const result = await messageBus.request('init', {});
 			setState((prev) => ({
 				...prev,
 				session: result.session,
@@ -184,7 +183,7 @@ export function DebugNavigationApp(): JSX.Element {
 	async function loadCallStack(): Promise<void> {
 		setIsCallStackLoading(true);
 		try {
-			const result = await HostClient.listCallStack();
+			const result = await messageBus.request('listCallStack', {});
 			setState((prev) => ({
 				...prev,
 				threads: result.threads,
@@ -213,7 +212,7 @@ export function DebugNavigationApp(): JSX.Element {
 		}
 
 		try {
-			const result = await HostClient.getDisassembly();
+			const result = await messageBus.request('getDisassembly', {});
 			setState((prev) => ({
 				...prev,
 				selection: result.selection,
@@ -244,7 +243,7 @@ export function DebugNavigationApp(): JSX.Element {
 	): Promise<void> {
 		setPendingFrameId(frameId);
 		try {
-			const result = await HostClient.selectStackFrame(threadId, frameId, {
+			const result = await messageBus.request('selectStackFrame', { threadId, frameId,
 				frameIndex,
 				frameName: frame.name,
 				sourcePath: frame.sourcePath,

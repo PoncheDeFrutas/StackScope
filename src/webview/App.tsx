@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 import { VirtualMemoryGrid, type MemorySelection } from './components/VirtualMemoryGrid.js';
 import { StatusBar } from './components/StatusBar.js';
@@ -214,7 +213,7 @@ export function App(): JSX.Element {
 
 	async function init(): Promise<void> {
 		try {
-			const result = await HostClient.init();
+			const result = await messageBus.request('init', {});
 			const restoredViewState = result.viewState;
 			const restoredConfig = result.activeDocument?.config ?? restoredViewState?.config ?? DEFAULT_CONFIG;
 			const restoredTarget = result.activeDocument?.address ?? restoredViewState?.currentTarget ?? '';
@@ -300,7 +299,7 @@ export function App(): JSX.Element {
 		});
 
 		try {
-			const result = await HostClient.openDocument(target, {
+			const result = await messageBus.request('openDocument', { target,
 				displayName: options?.displayName ?? target,
 				config: options?.config ?? config,
 			});
@@ -420,7 +419,7 @@ export function App(): JSX.Element {
 
 	const handleSavePreset = useCallback(async (name: string, target: string) => {
 		try {
-			const result = await HostClient.savePreset(name, target);
+			const result = await messageBus.request('savePreset', { name, target });
 			setPresets((prev) => {
 				const exists = prev.some((preset) => preset.id === result.preset.id);
 				return exists
@@ -435,7 +434,7 @@ export function App(): JSX.Element {
 
 	const handleDeletePreset = useCallback(async (id: string) => {
 		try {
-			await HostClient.deletePreset(id);
+			await messageBus.request('deletePreset', { id });
 			setPresets((prev) => prev.filter((p) => p.id !== id));
 			if (selectedPresetId === id) {
 				setSelectedPresetId(null);
@@ -465,7 +464,7 @@ export function App(): JSX.Element {
 				return;
 			}
 
-			void HostClient.updateDocument(state.document.id, {
+			void messageBus.request('updateDocument', { id: state.document.id,
 				displayName,
 				config: newConfig,
 			}).then((result) => {

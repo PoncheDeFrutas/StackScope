@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ProtocolErrorCode, ProtocolRequestError } from '../../protocol/errors.js';
-import { HostClient } from '../rpc/HostClient.js';
+import { messageBus } from '../rpc/WebviewMessageBus.js';
 import { LoadGeneration } from './LoadGeneration.js';
 import { mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 
@@ -123,7 +123,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 			});
 
 			try {
-				const result = await HostClient.readMemory(documentId, pageOffset, PAGE_SIZE);
+				const result = await messageBus.request('readMemory', { documentId, offset: pageOffset, count: PAGE_SIZE });
 
 				if (
 					!mountedRef.current ||
