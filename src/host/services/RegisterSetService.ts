@@ -52,15 +52,6 @@ export class RegisterSetService {
 	}
 
 	/**
-	 * Gets the currently selected register set.
-	 */
-	getSelected(): RegisterSet {
-		const set = this.get(this.selectedSetId);
-		// Fall back to first builtin if selected set was deleted
-		return set ?? BUILTIN_REGISTER_SETS[0];
-	}
-
-	/**
 	 * Selects a register set by ID.
 	 */
 	select(id: string): boolean {

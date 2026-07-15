@@ -8,10 +8,3 @@ coverage
 *.log
 *.vsix
 
-#AI local state
-.serena/
-graphify-out/
-AGENTS.md
-EOF
-.codex
-.agents/

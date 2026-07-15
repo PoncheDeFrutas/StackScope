@@ -33,7 +33,7 @@ export function createMemoryPreset(
 	});
 }
 
-export const QUICK_REGISTER_TARGETS = new Set(['$pc', '$sp', '$lr']);
+const QUICK_REGISTER_TARGETS = new Set(['$pc', '$sp', '$lr']);
 
 export function isQuickRegisterTarget(target: string): boolean {
 	return QUICK_REGISTER_TARGETS.has(normalizePresetTarget(target));

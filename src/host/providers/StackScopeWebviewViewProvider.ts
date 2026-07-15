@@ -4,7 +4,7 @@ import {
 	type StackScopeWebviewKind,
 } from '../webview/getWebviewHtml.js';
 
-export interface StackScopeWebviewViewOptions {
+interface StackScopeWebviewViewOptions {
 	title: string;
 	viewKind: StackScopeWebviewKind;
 	backgroundColor: string;

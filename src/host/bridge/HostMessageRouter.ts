@@ -4,7 +4,7 @@ import type { SessionTracker } from '../../debug/contracts/SessionTracker.js';
 import type { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import type { EventMap, EventName } from '../../protocol/events.js';
 import { ProtocolErrorCode, createProtocolError, normalizeProtocolError } from '../../protocol/errors.js';
-import type { ProtocolRequest, ProtocolResponse } from '../../protocol/messages.js';
+import type { ProtocolRequest } from '../../protocol/messages.js';
 import type { MethodMap, MethodName } from '../../protocol/methods.js';
 import type { PresetService } from '../services/PresetService.js';
 import type { RegisterSetService } from '../services/RegisterSetService.js';
@@ -139,7 +139,7 @@ export class HostMessageRouter {
 		const request = message as ProtocolRequest<MethodName, unknown>;
 		const handler = this.handlers.get(request.method);
 		if (!handler) {
-			this.sendResponse(webview, request.id, {
+			this.postMessage(webview, {
 				type: 'response',
 				id: request.id,
 				success: false,
@@ -153,28 +153,20 @@ export class HostMessageRouter {
 
 		try {
 			const result = await handler(request.params as MethodMap[MethodName]['params']);
-			this.sendResponse(webview, request.id, {
+			this.postMessage(webview, {
 				type: 'response',
 				id: request.id,
 				success: true,
 				result,
 			});
 		} catch (error) {
-			this.sendResponse(webview, request.id, {
+			this.postMessage(webview, {
 				type: 'response',
 				id: request.id,
 				success: false,
 				error: normalizeProtocolError(error),
 			});
 		}
-	}
-
-	private sendResponse(
-		webview: vscode.Webview,
-		_id: string,
-		response: ProtocolResponse<unknown>
-	): void {
-		this.postMessage(webview, response);
 	}
 
 	private postMessage(webview: vscode.Webview, message: unknown): void {
