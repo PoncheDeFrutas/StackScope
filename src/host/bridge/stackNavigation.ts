@@ -7,7 +7,7 @@ import type {
 	StackThreadSnapshot,
 } from '../../protocol/methods.js';
 
-export interface StackFrameLookupRequest {
+interface StackFrameLookupRequest {
 	threadId: number;
 	frameId: number;
 	frameIndex?: number;

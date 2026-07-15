@@ -1,6 +1,6 @@
 import type { ReadMemoryResult } from '../contracts/DebugGateway.js';
 
-export interface DapReadMemoryResponse {
+interface DapReadMemoryResponse {
 	address?: string;
 	data?: string;
 }

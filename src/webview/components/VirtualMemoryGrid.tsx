@@ -9,9 +9,6 @@ import {
 } from '../changeTracking.js';
 import { formatMemoryAddress, parseMemoryAddress } from '../memoryAddress.js';
 
-/** Represents a byte value or null for unreadable memory */
-export type MemoryByte = number | null;
-
 export interface MemorySelection {
 	anchorOffset: number;
 	startOffset: number;

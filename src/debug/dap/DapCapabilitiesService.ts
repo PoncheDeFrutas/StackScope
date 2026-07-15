@@ -84,7 +84,7 @@ export class DapCapabilitiesService implements vscode.DebugAdapterTrackerFactory
 		};
 	}
 
-	get(sessionId: string): Snapshot {
+	private get(sessionId: string): Snapshot {
 		return this.snapshots.get(sessionId) ?? emptySnapshot('unknown');
 	}
 

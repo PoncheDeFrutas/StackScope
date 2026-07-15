@@ -120,15 +120,8 @@ export class DocumentRegistry {
 		}
 	}
 
-	/**
-	 * Clears all documents.
-	 */
-	clear(): void {
-		this.documents.clear();
-		this.activeDocumentId = null;
-	}
 }
 
-export function normalizeDocumentTarget(target: string): string {
+function normalizeDocumentTarget(target: string): string {
 	return target.trim().replace(/\s+/g, ' ');
 }
