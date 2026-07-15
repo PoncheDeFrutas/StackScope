@@ -1,4 +1,4 @@
-export interface StackSelectionState {
+interface StackSelectionState {
 	sessionId: string | null;
 	threadId: number | null;
 	frameId: number | null;

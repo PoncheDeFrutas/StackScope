@@ -1,4 +1,4 @@
-export interface MemoryPageDataLike {
+interface MemoryPageDataLike {
 	data: (number | null)[];
 }
 

@@ -9,12 +9,12 @@ type Snapshot = {
 	operations: Record<Operation, { state: CapabilityState; source?: string; reason?: string }>;
 };
 
-export interface DebugWriteSupport {
+interface DebugWriteSupport {
 	memory: boolean;
 	register: boolean;
 }
 
-export interface DataBreakpointSupport {
+interface DataBreakpointSupport {
 	dataBreakpoints: boolean;
 	memoryRanges: boolean;
 	gdbRegisterFallback: boolean;

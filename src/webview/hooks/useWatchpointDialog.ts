@@ -7,7 +7,7 @@ import type {
 } from '../../protocol/methods.js';
 import { HostClient } from '../rpc/HostClient.js';
 
-export interface WatchpointDialogState {
+interface WatchpointDialogState {
 	target: WatchpointTarget;
 	candidateId: string;
 	description: string;

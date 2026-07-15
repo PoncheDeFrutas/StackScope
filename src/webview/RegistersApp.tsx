@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
 	RegisterItemSnapshot,
 	RegisterSetSnapshot,
+	RegisterValueFormat,
 	RegisterValueSnapshot,
 	SessionSnapshot,
 	WatchpointSnapshot,
 	WatchpointSupportSnapshot,
 	WatchpointTarget,
 } from '../protocol/methods.js';
-import { RegisterPanel, type RegisterValueFormat } from './components/RegisterPanel.js';
+import { RegisterPanel } from './components/RegisterPanel.js';
 import { RegisterSetEditor } from './components/RegisterSetEditor.js';
 import { RegisterEditDialog } from './components/RegisterEditDialog.js';
 import { WatchpointDialog } from './components/WatchpointDialog.js';

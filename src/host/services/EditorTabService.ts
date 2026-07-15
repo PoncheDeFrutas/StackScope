@@ -4,7 +4,7 @@ import type { DebugNavigationMode } from '../../protocol/methods.js';
 import type { DebugNavigationModeChangedPayload } from '../../protocol/events.js';
 import { getWebviewHtml } from '../webview/getWebviewHtml.js';
 
-export interface WebviewRouterBridge {
+interface WebviewRouterBridge {
 	attach(webview: vscode.Webview): void;
 	detach(webview?: vscode.Webview): void;
 }

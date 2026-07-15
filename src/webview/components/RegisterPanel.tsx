@@ -1,7 +1,5 @@
 import { useState, useCallback, type CSSProperties, type ChangeEvent } from 'react';
-import type { RegisterSetSnapshot, RegisterValueSnapshot } from '../../protocol/methods.js';
-
-export type RegisterValueFormat = 'hex' | 'dec' | 'oct' | 'bin' | 'raw';
+import type { RegisterSetSnapshot, RegisterValueFormat, RegisterValueSnapshot } from '../../protocol/methods.js';
 
 interface RegisterPanelProps {
 	registerSets: RegisterSetSnapshot[];
