@@ -13,13 +13,6 @@ const STORAGE_KEY = 'stackscope.registerSets';
 const SELECTED_SET_KEY = 'stackscope.selectedRegisterSet';
 
 /**
- * Generates a unique register set ID.
- */
-function generateSetId(): string {
-	return `regset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-/**
  * Service for managing register sets.
  * Stores user sets in workspace state.
  */
@@ -99,7 +92,7 @@ export class RegisterSetService {
 			createRegisterItem(r.expression, r.label)
 		);
 
-		const set = createRegisterSet(generateSetId(), name, items, description);
+		const set = createRegisterSet(`regset_${crypto.randomUUID()}`, name, items, description);
 
 		this.userSets.push(set);
 		this.saveToStorage();

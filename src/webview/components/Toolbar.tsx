@@ -122,13 +122,13 @@ export function Toolbar({
 
 	const handleDeleteSelectedPreset = useCallback(() => {
 		const selected = presets.find((p) => p.id === selectedPresetId);
-		if (selected && !selected.isBuiltin) {
+		if (selected) {
 			onDeletePreset(selected.id);
 		}
 	}, [presets, selectedPresetId, onDeletePreset]);
 
 	const selectedPreset = presets.find((p) => p.id === selectedPresetId);
-	const canDelete = selectedPreset && !selectedPreset.isBuiltin;
+	const canDelete = Boolean(selectedPreset);
 	const trimmedTarget = target.trim();
 	const canSavePreset = Boolean(trimmedTarget) && !isQuickRegisterTarget(trimmedTarget);
 	const savePresetTitle = !trimmedTarget

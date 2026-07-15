@@ -5,11 +5,13 @@ import {
 } from '../webview/getWebviewHtml.js';
 
 export interface StackScopeWebviewViewOptions {
-	viewType: string;
 	title: string;
 	viewKind: StackScopeWebviewKind;
 	backgroundColor: string;
 }
+
+export const MEMORY_VIEW_TYPE = 'stackscope.memoryView';
+export const REGISTER_VIEW_TYPE = 'stackscope.registersView';
 
 export interface WebviewMessageRouter {
 	attach(webview: vscode.Webview): void;
@@ -58,10 +60,6 @@ export class StackScopeWebviewViewProvider implements vscode.WebviewViewProvider
 
 	focus(): void {
 		this.view?.show(true);
-	}
-
-	isVisible(): boolean {
-		return this.view?.visible ?? false;
 	}
 
 	dispose(): void {

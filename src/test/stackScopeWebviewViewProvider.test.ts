@@ -60,7 +60,6 @@ class FakeRouter implements WebviewMessageRouter {
 
 function createProvider(router: WebviewMessageRouter): StackScopeWebviewViewProvider {
 	return new StackScopeWebviewViewProvider(vscode.Uri.file('/extension'), router, {
-		viewType: 'stackscope.testView',
 		title: 'StackScope Test',
 		viewKind: 'memory',
 		backgroundColor: 'var(--vscode-editor-background)',

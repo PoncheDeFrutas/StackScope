@@ -1,5 +1,4 @@
 import type { MemoryPreset } from '../../../domain/presets/MemoryPreset.js';
-import { isBuiltinPreset } from '../../../domain/presets/MemoryPreset.js';
 import type { RegisterSet } from '../../../domain/registers/RegisterSet.js';
 import { isBuiltinRegisterSet } from '../../../domain/registers/RegisterSet.js';
 
@@ -9,7 +8,6 @@ export function toPresetSnapshot(preset: MemoryPreset) {
 		name: preset.name,
 		target: preset.target,
 		description: preset.description,
-		isBuiltin: isBuiltinPreset(preset),
 	};
 }
 

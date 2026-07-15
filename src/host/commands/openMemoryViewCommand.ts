@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import type { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
-import type { RegisterViewProvider } from '../providers/RegisterViewProvider.js';
+import type { StackScopeWebviewViewProvider } from '../providers/StackScopeWebviewViewProvider.js';
 import type { EditorTabService } from '../services/EditorTabService.js';
 
 /**
@@ -10,7 +9,7 @@ import type { EditorTabService } from '../services/EditorTabService.js';
  * Address input and document creation are handled within the webview toolbar.
  */
 export function createOpenMemoryViewCommand(
-	memoryViewProvider: MemoryViewProvider
+	memoryViewProvider: StackScopeWebviewViewProvider
 ): vscode.Disposable {
 	return vscode.commands.registerCommand('stackscope.openMemoryView', () => {
 		memoryViewProvider.focus();
@@ -54,7 +53,7 @@ export function createOpenDisassemblyInEditorCommand(
  * Creates and registers the "Focus Memory View" command.
  */
 export function createFocusMemoryViewCommand(
-	memoryViewProvider: MemoryViewProvider
+	memoryViewProvider: StackScopeWebviewViewProvider
 ): vscode.Disposable {
 	return vscode.commands.registerCommand('stackscope.focusMemoryView', () => {
 		memoryViewProvider.focus();
@@ -65,7 +64,7 @@ export function createFocusMemoryViewCommand(
  * Creates and registers the command that focuses StackScope Registers.
  */
 export function createFocusRegistersViewCommand(
-	registerViewProvider: RegisterViewProvider
+	registerViewProvider: StackScopeWebviewViewProvider
 ): vscode.Disposable {
 	return vscode.commands.registerCommand('stackscope.focusRegistersView', () => {
 		registerViewProvider.focus();

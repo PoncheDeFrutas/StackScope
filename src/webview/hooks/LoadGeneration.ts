@@ -1,7 +1,5 @@
-/**
- * Identifies current memory-load batch and rejects responses from older batches.
- */
-export class MemoryLoadGeneration {
+/** Identifies the latest async load and rejects stale responses. */
+export class LoadGeneration {
 	private value = 0;
 
 	current(): number {
@@ -11,6 +9,10 @@ export class MemoryLoadGeneration {
 	advance(): number {
 		this.value += 1;
 		return this.value;
+	}
+
+	invalidate(): void {
+		this.value += 1;
 	}
 
 	isCurrent(generation: number): boolean {

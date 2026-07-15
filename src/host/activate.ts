@@ -8,8 +8,7 @@ import {
 	createOpenDisassemblyInEditorCommand,
 	createFocusRegistersViewCommand,
 } from './commands/openMemoryViewCommand.js';
-import { MemoryViewProvider } from './providers/MemoryViewProvider.js';
-import { RegisterViewProvider } from './providers/RegisterViewProvider.js';
+import { MEMORY_VIEW_TYPE, REGISTER_VIEW_TYPE } from './providers/StackScopeWebviewViewProvider.js';
 import { disposeHostErrorReporter } from './services/HostErrorReporter.js';
 
 let services: HostServices | null = null;
@@ -25,7 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Register webview view provider for panel
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
-			MemoryViewProvider.viewType,
+			MEMORY_VIEW_TYPE,
 			services.memoryViewProvider,
 			{
 				webviewOptions: {
@@ -37,7 +36,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
-			RegisterViewProvider.viewType,
+			REGISTER_VIEW_TYPE,
 			services.registerViewProvider,
 			{
 				webviewOptions: {

@@ -12,7 +12,6 @@ import {
 	ProtocolRequestError,
 	createProtocolError,
 } from '../../protocol/errors.js';
-import { generateRequestId } from '../../shared/ids.js';
 
 declare const acquireVsCodeApi: () => {
 	postMessage(message: unknown): void;
@@ -56,7 +55,7 @@ export class WebviewMessageBus {
 				createProtocolError(ProtocolErrorCode.UNKNOWN_ERROR, 'Webview message bus is disposed')
 			);
 		}
-		const id = generateRequestId();
+		const id = `req_${crypto.randomUUID()}`;
 
 		const request: ProtocolRequest<M, MethodMap[M]['params']> = {
 			type: 'request',

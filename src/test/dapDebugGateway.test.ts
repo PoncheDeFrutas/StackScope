@@ -14,18 +14,17 @@ suite('DapDebugGateway', () => {
 			active -= 1;
 			return { result: `value:${args.expression}` };
 		});
-		const gateway = new DapDebugGateway({
-			maxConcurrentRegisterEvaluations: 2,
-			sessionResolver: () => session,
-		});
+		const gateway = new DapDebugGateway(undefined, () => session);
 
-		const results = await gateway.readRegisters('session-1', ['r0', 'r1', 'r2'], 42);
+		const results = await gateway.readRegisters('session-1', ['r0', 'r1', 'r2', 'r3', 'r4'], 42);
 
-		assert.strictEqual(peak, 2);
+		assert.strictEqual(peak, 4);
 		assert.deepStrictEqual(results, [
 			{ expression: 'r0', value: 'value:$r0' },
 			{ expression: 'r1', value: 'value:$r1' },
 			{ expression: 'r2', value: 'value:$r2' },
+			{ expression: 'r3', value: 'value:$r3' },
+			{ expression: 'r4', value: 'value:$r4' },
 		]);
 	});
 
@@ -34,7 +33,7 @@ suite('DapDebugGateway', () => {
 		let peak = 0;
 		const session = createSession(async (command, args) => {
 			if (command === 'threads') {
-				return { threads: [{ id: 1 }, { id: 2 }, { id: 3 }] };
+				return { threads: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }] };
 			}
 			assert.strictEqual(command, 'stackTrace');
 			active += 1;
@@ -47,23 +46,20 @@ suite('DapDebugGateway', () => {
 			}
 			return { stackFrames: [{ id: threadId * 10, name: `frame-${threadId}` }] };
 		});
-		const gateway = new DapDebugGateway({
-			maxConcurrentStackTraces: 2,
-			sessionResolver: () => session,
-		});
+		const gateway = new DapDebugGateway(undefined, () => session);
 
 		const threads = await gateway.listCallStack('session-1');
 
-		assert.strictEqual(peak, 2);
-		assert.deepStrictEqual(threads.map((thread) => thread.id), [1, 2, 3]);
+		assert.strictEqual(peak, 4);
+		assert.deepStrictEqual(threads.map((thread) => thread.id), [1, 2, 3, 4, 5]);
 		assert.deepStrictEqual(
 			threads.map((thread) => thread.frames[0]?.id),
-			[10, 20, 30]
+			[10, 20, 30, 40, 50]
 		);
 	});
 
 	test('returns per-expression session errors when no session resolves', async () => {
-		const gateway = new DapDebugGateway({ sessionResolver: () => undefined });
+		const gateway = new DapDebugGateway(undefined, () => undefined);
 
 		assert.deepStrictEqual(await gateway.readRegisters('missing', ['$pc', '$sp']), [
 			{ expression: '$pc', value: null, error: 'No active session' },
@@ -82,16 +78,13 @@ suite('DapDebugGateway', () => {
 			active -= 1;
 			return { address: '0x0', data: '' };
 		});
-		const gateway = new DapDebugGateway({
-			maxConcurrentMemoryReads: 2,
-			sessionResolver: () => session,
-		});
+		const gateway = new DapDebugGateway(undefined, () => session);
 
-		await Promise.all([0, 1, 2, 3].map((offset) =>
+		await Promise.all([0, 1, 2, 3, 4].map((offset) =>
 			gateway.readMemory('session-1', '0x0', offset, 1)
 		));
 
-		assert.strictEqual(peak, 2);
+		assert.strictEqual(peak, 4);
 	});
 
 	test('uses GDB evaluate fallback for memory writes when DAP writeMemory is unavailable', async () => {
@@ -101,7 +94,7 @@ suite('DapDebugGateway', () => {
 			expressions.push(String(args.expression));
 			return { result: '1' };
 		});
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+		const gateway = new DapDebugGateway(gdbFallbackCapabilities(), () => session);
 
 		const result = await gateway.writeMemory('session-1', '0x1000', 1, [0xaa, 0xbb], true);
 
@@ -118,7 +111,7 @@ suite('DapDebugGateway', () => {
 			assert.strictEqual(args.expression, '$x0 = 0x42');
 			return { result: '0x42' };
 		});
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+		const gateway = new DapDebugGateway(gdbFallbackCapabilities(), () => session);
 
 		assert.deepStrictEqual(await gateway.setExpression('session-1', 'x0', '0x42'), { value: '0x42' });
 	});
@@ -136,7 +129,7 @@ suite('DapDebugGateway', () => {
 			}
 			return { result: '' };
 		});
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+		const gateway = new DapDebugGateway(gdbFallbackCapabilities(), () => session);
 
 		assert.deepStrictEqual(await gateway.writeMemory('session-1', '0x2000', 0, [0x49], true), {
 			offset: 0,
@@ -162,7 +155,7 @@ suite('DapDebugGateway', () => {
 		const capabilities = {
 			supportsDataBreakpoints: () => true,
 		} as never;
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, capabilities);
+		const gateway = new DapDebugGateway(capabilities, () => session);
 		assert.deepStrictEqual(await gateway.getDataBreakpointInfo('session-1', { name: '$pc', frameId: 7 }), {
 			dataId: 'pc-id', description: 'Program counter', accessTypes: ['read', 'write'],
 		});
@@ -176,7 +169,7 @@ suite('DapDebugGateway', () => {
 			requests.push({ expression: String(args.expression), context: args.context });
 			return { result: args.expression === '-exec awatch $rax' ? 'Hardware access watchpoint 7: $rax' : '' };
 		});
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+		const gateway = new DapDebugGateway(gdbFallbackCapabilities(), () => session);
 
 		assert.deepStrictEqual(await gateway.createGdbWatchpoint('session-1', 'rax', 'readWrite'), {
 			breakpointId: 7, verified: true, message: 'Hardware access watchpoint 7: $rax',
@@ -192,7 +185,7 @@ suite('DapDebugGateway', () => {
 		const session = createSession(async () => {
 			throw new Error('must not be called');
 		});
-		const gateway = new DapDebugGateway({ sessionResolver: () => session }, gdbFallbackCapabilities());
+		const gateway = new DapDebugGateway(gdbFallbackCapabilities(), () => session);
 
 		assert.deepStrictEqual(await gateway.createGdbWatchpoint('session-1', '$rax; continue', 'write'), {
 			breakpointId: null, verified: false, message: 'GDB fallback only accepts a single register expression.',

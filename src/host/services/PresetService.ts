@@ -2,21 +2,12 @@ import * as vscode from 'vscode';
 import type { MemoryPreset } from '../../domain/presets/MemoryPreset.js';
 import {
 	createMemoryPreset,
-	BUILTIN_PRESETS,
-	isBuiltinPreset,
 	isQuickRegisterTarget,
 } from '../../domain/presets/MemoryPreset.js';
 import { SequentialTaskQueue } from '../../shared/SequentialTaskQueue.js';
 import { reportHostError } from './HostErrorReporter.js';
 
 const STORAGE_KEY = 'stackscope.presets';
-
-/**
- * Generates a unique preset ID.
- */
-function generatePresetId(): string {
-	return `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-}
 
 /**
  * Service for managing memory presets.
@@ -30,11 +21,9 @@ export class PresetService {
 		this.loadFromStorage();
 	}
 
-	/**
-	 * Gets all presets (builtin + user).
-	 */
+	/** Gets all user presets. */
 	getAll(): MemoryPreset[] {
-		return [...BUILTIN_PRESETS, ...this.userPresets];
+		return this.getUserPresets();
 	}
 
 	/**
@@ -48,11 +37,6 @@ export class PresetService {
 	 * Gets a preset by ID.
 	 */
 	get(id: string): MemoryPreset | undefined {
-		// Check builtins first
-		const builtin = BUILTIN_PRESETS.find((p) => p.id === id);
-		if (builtin) {
-			return builtin;
-		}
 		return this.userPresets.find((p) => p.id === id);
 	}
 
@@ -66,7 +50,7 @@ export class PresetService {
 		}
 
 		const preset = createMemoryPreset(
-			generatePresetId(),
+			`preset_${crypto.randomUUID()}`,
 			name.trim(),
 			target.trim(),
 			description
@@ -77,17 +61,8 @@ export class PresetService {
 		return preset;
 	}
 
-	/**
-	 * Deletes a user preset by ID.
-	 * Cannot delete builtin presets.
-	 */
+	/** Deletes a user preset by ID. */
 	delete(id: string): boolean {
-		// Check if it's a builtin
-		const builtin = BUILTIN_PRESETS.find((p) => p.id === id);
-		if (builtin) {
-			return false; // Cannot delete builtin
-		}
-
 		const index = this.userPresets.findIndex((p) => p.id === id);
 		if (index === -1) {
 			return false;
@@ -130,7 +105,7 @@ export class PresetService {
 		const stored = this.context.workspaceState.get<MemoryPreset[]>(STORAGE_KEY);
 		if (Array.isArray(stored)) {
 			this.userPresets = dedupeUserPresets(
-				stored.filter((p) => !isBuiltinPreset(p) && !isQuickRegisterTarget(p.target))
+				stored.filter((p) => !isQuickRegisterTarget(p.target))
 			);
 		}
 	}

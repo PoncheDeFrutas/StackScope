@@ -27,36 +27,18 @@ import { createGdbWatchpoint, removeGdbWatchpoint } from './GdbWatchpointAdapter
 
 const DEFAULT_MAX_CONCURRENT_DAP_REQUESTS = 4;
 
-export interface DapDebugGatewayOptions {
-	maxConcurrentRegisterEvaluations?: number;
-	maxConcurrentStackTraces?: number;
-	maxConcurrentMemoryReads?: number;
-	sessionResolver?: (sessionId: string) => vscode.DebugSession | undefined;
-}
-
 /**
  * DAP-based implementation of DebugGateway.
  * Handles readMemory and evaluate requests via VS Code debug API.
  */
 export class DapDebugGateway implements DebugGateway {
 	private readonly resolver = new DapAddressResolver();
-	private readonly maxConcurrentRegisterEvaluations: number;
-	private readonly maxConcurrentStackTraces: number;
-	private readonly memoryReadLimiter: ConcurrencyLimiter;
-	private readonly sessionResolver: (sessionId: string) => vscode.DebugSession | undefined;
+	private readonly memoryReadLimiter = new ConcurrencyLimiter(DEFAULT_MAX_CONCURRENT_DAP_REQUESTS);
 
-	constructor(options: DapDebugGatewayOptions = {}, private readonly capabilities?: DapCapabilitiesService) {
-		this.maxConcurrentRegisterEvaluations = normalizeConcurrencyLimit(
-			options.maxConcurrentRegisterEvaluations
-		);
-		this.maxConcurrentStackTraces = normalizeConcurrencyLimit(
-			options.maxConcurrentStackTraces
-		);
-		this.memoryReadLimiter = new ConcurrencyLimiter(
-			normalizeConcurrencyLimit(options.maxConcurrentMemoryReads)
-		);
-		this.sessionResolver = options.sessionResolver ?? findActiveSession;
-	}
+	constructor(
+		private readonly capabilities?: DapCapabilitiesService,
+		private readonly sessionResolver: (sessionId: string) => vscode.DebugSession | undefined = findActiveSession
+	) {}
 
 	async writeMemory(sessionId: string, memoryReference: string, offset: number, data: number[], allowPartial: boolean): Promise<WriteMemoryResult | null> {
 		const session = this.findSession(sessionId);
@@ -268,7 +250,7 @@ export class DapDebugGateway implements DebugGateway {
 
 		return mapWithConcurrency(
 			expressions,
-			this.maxConcurrentRegisterEvaluations,
+			DEFAULT_MAX_CONCURRENT_DAP_REQUESTS,
 			async (expression): Promise<RegisterEvalResult> => {
 				try {
 					const value = await this.evaluateRegister(session, expression, effectiveFrameId);
@@ -296,7 +278,7 @@ export class DapDebugGateway implements DebugGateway {
 
 			const stackResults = await mapWithConcurrency(
 				threads,
-				this.maxConcurrentStackTraces,
+				DEFAULT_MAX_CONCURRENT_DAP_REQUESTS,
 				async (thread): Promise<StackThreadResult> => {
 					try {
 						const stackResponse = await session.customRequest('stackTrace', {
@@ -497,13 +479,6 @@ export class DapDebugGateway implements DebugGateway {
 		return this.sessionResolver(sessionId);
 	}
 
-}
-
-function normalizeConcurrencyLimit(value: number | undefined): number {
-	if (typeof value !== 'number' || !Number.isFinite(value)) {
-		return DEFAULT_MAX_CONCURRENT_DAP_REQUESTS;
-	}
-	return Math.max(1, Math.floor(value));
 }
 
 function normalizeGdbRegister(expression: string): string {

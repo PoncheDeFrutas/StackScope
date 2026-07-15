@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ProtocolErrorCode, ProtocolRequestError } from '../../protocol/errors.js';
 import { HostClient } from '../rpc/HostClient.js';
-import { MemoryLoadGeneration } from './MemoryLoadGeneration.js';
+import { LoadGeneration } from './LoadGeneration.js';
 import { mapWithConcurrency } from '../../shared/mapWithConcurrency.js';
 
 /** Default page size in bytes */
@@ -71,7 +71,7 @@ export function usePagedMemory(): UsePagedMemoryResult {
 		inFlight: new Set(),
 	});
 	const documentIdRef = useRef<string | null>(null);
-	const loadGenerationRef = useRef(new MemoryLoadGeneration());
+	const loadGenerationRef = useRef(new LoadGeneration());
 	const inFlightRef = useRef(new Map<number, number>());
 	const refreshPromiseRef = useRef<Promise<ReadonlyMap<number, MemoryPage>> | null>(null);
 

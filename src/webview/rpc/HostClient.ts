@@ -119,9 +119,7 @@ export const HostClient = {
 		return messageBus.request('updateDocument', { id, ...updates });
 	},
 
-	/**
-	 * Lists all available presets (builtin + user).
-	 */
+	/** Lists saved presets. */
 	async listPresets(): Promise<ListPresetsResult> {
 		return messageBus.request('listPresets', {});
 	},

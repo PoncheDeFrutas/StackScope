@@ -10,7 +10,6 @@ import {
 import { ProtocolErrorCode, createProtocolError } from '../../protocol/errors.js';
 import type { DocumentChangedPayload } from '../../protocol/events.js';
 import type { MethodMap } from '../../protocol/methods.js';
-import { generateDocumentId } from '../../shared/ids.js';
 import { DebugMutationService } from './DebugMutationService.js';
 
 type DocumentSnapshot = MethodMap['listDocuments']['result']['documents'][number];
@@ -144,7 +143,7 @@ export class MemoryDocumentService {
 		}
 
 		const doc = createMemoryDocument(
-			generateDocumentId(),
+			`doc_${crypto.randomUUID()}`,
 			target,
 			state.sessionId,
 			resolvedReference,

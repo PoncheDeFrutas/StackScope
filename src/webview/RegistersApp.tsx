@@ -16,7 +16,7 @@ import { WatchpointsPanel } from './components/WatchpointsPanel.js';
 import { ExplorerSection } from './components/ExplorerSection.js';
 import { useWatchpointDialog } from './hooks/useWatchpointDialog.js';
 import type { Endianness } from '../domain/config/MemoryViewConfig.js';
-import { RegisterLoadGeneration } from './hooks/RegisterLoadGeneration.js';
+import { LoadGeneration } from './hooks/LoadGeneration.js';
 import { HostClient } from './rpc/HostClient.js';
 import { messageBus } from './rpc/WebviewMessageBus.js';
 
@@ -44,8 +44,8 @@ export function RegistersApp(): JSX.Element {
 	const selectedSetIdRef = useRef(selectedSetId);
 	const sessionRef = useRef(session);
 	const mountedRef = useRef(false);
-	const initializeGenerationRef = useRef(new RegisterLoadGeneration());
-	const loadGenerationRef = useRef(new RegisterLoadGeneration());
+	const initializeGenerationRef = useRef(new LoadGeneration());
+	const loadGenerationRef = useRef(new LoadGeneration());
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -65,7 +65,7 @@ export function RegistersApp(): JSX.Element {
 	}, [session]);
 
 	const loadRegisters = useCallback(async (setId: string): Promise<void> => {
-		const generation = loadGenerationRef.current.begin();
+		const generation = loadGenerationRef.current.advance();
 		setIsLoading(true);
 		try {
 			const result = await HostClient.readRegisters(setId);
@@ -88,7 +88,7 @@ export function RegistersApp(): JSX.Element {
 	}, []);
 
 	const initialize = useCallback(async (): Promise<void> => {
-		const generation = initializeGenerationRef.current.begin();
+		const generation = initializeGenerationRef.current.advance();
 		try {
 			const result = await HostClient.init();
 			if (!mountedRef.current || !initializeGenerationRef.current.isCurrent(generation)) {

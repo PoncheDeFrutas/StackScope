@@ -4,8 +4,7 @@ import { DapDebugGateway } from '../../debug/dap/DapDebugGateway.js';
 import { DapCapabilitiesService } from '../../debug/dap/DapCapabilitiesService.js';
 import { DocumentRegistry } from '../../domain/documents/DocumentRegistry.js';
 import { HostMessageRouter } from '../bridge/HostMessageRouter.js';
-import { MemoryViewProvider } from '../providers/MemoryViewProvider.js';
-import { RegisterViewProvider } from '../providers/RegisterViewProvider.js';
+import { StackScopeWebviewViewProvider } from '../providers/StackScopeWebviewViewProvider.js';
 import { PresetService } from '../services/PresetService.js';
 import { RegisterSetService } from '../services/RegisterSetService.js';
 import { StackSelectionService } from '../services/StackSelectionService.js';
@@ -30,8 +29,8 @@ export interface HostServices {
 	viewStateService: ViewStateService;
 	editorTabService: EditorTabService;
 	messageRouter: HostMessageRouter;
-	memoryViewProvider: MemoryViewProvider;
-	registerViewProvider: RegisterViewProvider;
+	memoryViewProvider: StackScopeWebviewViewProvider;
+	registerViewProvider: StackScopeWebviewViewProvider;
 }
 
 /**
@@ -45,7 +44,7 @@ export function createHostServices(
 	const sessionTracker = new VscodeSessionTracker();
 	const capabilities = new DapCapabilitiesService();
 	const debugMutations = new DebugMutationService();
-	const debugGateway = new DapDebugGateway({}, capabilities);
+	const debugGateway = new DapDebugGateway(capabilities);
 	const documentRegistry = new DocumentRegistry();
 	const presetService = new PresetService(context);
 	const registerSetService = new RegisterSetService(context);
@@ -75,8 +74,16 @@ export function createHostServices(
 		dataWatchpoints
 	);
 	editorTabService.setRouter(messageRouter);
-	const memoryViewProvider = new MemoryViewProvider(extensionUri, messageRouter);
-	const registerViewProvider = new RegisterViewProvider(extensionUri, messageRouter);
+	const memoryViewProvider = new StackScopeWebviewViewProvider(extensionUri, messageRouter, {
+		title: 'StackScope Memory',
+		viewKind: 'memory',
+		backgroundColor: 'var(--vscode-panel-background, var(--vscode-editor-background))',
+	});
+	const registerViewProvider = new StackScopeWebviewViewProvider(extensionUri, messageRouter, {
+		title: 'StackScope Registers',
+		viewKind: 'registers',
+		backgroundColor: 'var(--vscode-sideBar-background, var(--vscode-editor-background))',
+	});
 
 	return {
 		sessionTracker,

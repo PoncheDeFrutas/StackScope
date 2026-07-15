@@ -27,7 +27,6 @@ export interface PresetSnapshot {
 	name: string;
 	target: string;
 	description?: string;
-	isBuiltin: boolean;
 }
 
 /**
@@ -434,38 +433,6 @@ export interface GetDisassemblyResult extends DisassemblySnapshot {
 	/* alias result */
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Method names (string literal union)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type MethodName = 
-	| 'init' 
-	| 'readMemory' 
-	| 'writeMemory'
-	| 'writeRegister'
-	| 'getWatchpointCandidate'
-	| 'createWatchpoint'
-	| 'removeWatchpoint'
-	| 'openDocument'
-	| 'listDocuments'
-	| 'selectDocument'
-	| 'closeDocument'
-	| 'updateDocument'
-	| 'listPresets'
-	| 'savePreset'
-	| 'deletePreset'
-	| 'listRegisterSets'
-	| 'saveRegisterSet'
-	| 'updateRegisterSet'
-	| 'deleteRegisterSet'
-	| 'selectRegisterSet'
-	| 'readRegisters'
-	| 'saveViewState'
-	| 'saveRegisterViewState'
-	| 'listCallStack'
-	| 'selectStackFrame'
-	| 'getDisassembly';
-
 /**
  * Maps method names to their param/result types.
  */
@@ -500,3 +467,5 @@ export interface MethodMap {
 	selectStackFrame: { params: SelectStackFrameParams; result: SelectStackFrameResult };
 	getDisassembly: { params: GetDisassemblyParams; result: GetDisassemblyResult };
 }
+
+export type MethodName = keyof MethodMap;

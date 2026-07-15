@@ -53,19 +53,6 @@ export interface DebugNavigationModeChangedPayload {
 	mode: DebugNavigationMode;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Event names
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type EventName =
-	| 'sessionChanged'
-	| 'watchpointsChanged'
-	| 'watchpointHit'
-	| 'documentChanged'
-	| 'callStackChanged'
-	| 'disassemblyChanged'
-	| 'debugNavigationModeChanged';
-
 /**
  * Maps event names to their payload types.
  */
@@ -78,3 +65,5 @@ export interface EventMap {
 	disassemblyChanged: DisassemblyChangedPayload;
 	debugNavigationModeChanged: DebugNavigationModeChangedPayload;
 }
+
+export type EventName = keyof EventMap;
