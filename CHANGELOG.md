@@ -6,6 +6,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-15
+
+### Changed
+
+- Simplified webview RPC calls by using the typed message bus directly and removed the redundant client facade.
+- Registered extension commands directly during activation and removed one-use command factories.
+- Consolidated DAP memory-reference resolution in the debug gateway and removed duplicate internal APIs and exports.
+
 ## [0.5.0] - 2026-07-12
 
 ### Added
